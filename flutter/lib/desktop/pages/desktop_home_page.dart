@@ -609,9 +609,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                   gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
+                // mikzfix: TechFix brand gradient (was pink/magenta)
                 colors: [
-                  Color.fromARGB(255, 226, 66, 188),
-                  Color.fromARGB(255, 244, 114, 124),
+                  Color.fromARGB(255, 15, 23, 42),
+                  Color.fromARGB(255, 29, 78, 216),
                 ],
               )),
               padding: EdgeInsets.all(20),

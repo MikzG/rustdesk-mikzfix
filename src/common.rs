@@ -2031,7 +2031,10 @@ pub fn create_symmetric_key_msg(their_pk_b: [u8; 32]) -> (Bytes, Bytes, secretbo
 
 #[inline]
 pub fn using_public_server() -> bool {
-    crate::get_custom_rendezvous_server(get_option("custom-rendezvous-server")).is_empty()
+    // mikzfix: our own server is compiled in via RENDEZVOUS_SERVERS, so this client is never
+    // on RustDesk's public infrastructure — even when no per-user custom server is set.
+    // Killing this also hides the misleading "set up your own server" footer hint.
+    false
 }
 
 pub struct ThrottledInterval {
