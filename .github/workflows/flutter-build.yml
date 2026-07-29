@@ -350,7 +350,12 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./res/msi
-          python preprocess.py --arp -d ../../rustdesk --app-name "MikzFix Remote" --manufacturer "MikzBots"
+          # NOTE: do NOT pass --app-name here. preprocess.py derives the dist exe path from it
+          # (init_global_vars: dist_dir/<app-name>.exe) to read the version, but build.py always
+          # produces `rustdesk.exe`. A mismatched --app-name makes version detection fail, so the
+          # $(var.Product) define is never written and the WiX build dies with 59x WIX0150.
+          # Branding the MSI's Product name would require renaming the built exe itself.
+          python preprocess.py --arp -d ../../rustdesk --manufacturer "MikzBots"
           nuget restore msi.sln
           $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
           msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10
