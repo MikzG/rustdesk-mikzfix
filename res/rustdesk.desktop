@@ -1,7 +1,9 @@
 [Desktop Entry]
-Name=RustDesk
+# mikzfix: display strings only. Exec/Icon deliberately keep the `rustdesk` names — they point at
+# the installed binary and icon file, and renaming them breaks the package layout.
+Name=MikzFix Remote
 GenericName=Remote Desktop
-Comment=Remote Desktop
+Comment=MikzFix remote support
 Exec=rustdesk %u
 Icon=rustdesk
 Terminal=false

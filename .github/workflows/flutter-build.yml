@@ -9,6 +9,11 @@ on:
       upload-tag:
         type: string
         default: "nightly"
+      # mikzfix: Windows-only by default (~20min). Set true for a full macOS/Linux/Android
+      # run (~60min). iOS stays off — undistributable without a paid Apple dev account.
+      all-platforms:
+        type: boolean
+        default: false
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -532,7 +537,7 @@ jobs:
             ./SignOutput/rustdesk-*.exe
 
   build-rustdesk-ios:
-    if: false # TEMP: mikzfix fast windows-only test build
+    if: ${{ inputs.all-platforms }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -652,7 +657,7 @@ jobs:
 
 
   build-for-macOS:
-    if: false # TEMP: mikzfix fast windows-only test build
+    if: ${{ inputs.all-platforms }}
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -876,7 +881,7 @@ jobs:
       - build-for-windows-flutter
       - build-for-windows-sciter
     runs-on: ubuntu-latest
-    if: false # TEMP: mikzfix fast windows-only test build (depends on macOS+sciter, both off)
+    if: ${{ inputs.all-platforms }} # mikzfix: needs macOS+sciter artifacts
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -914,7 +919,7 @@ jobs:
           files: rustdesk-${{ env.VERSION }}-unsigned.tar.gz
 
   build-rustdesk-android:
-    if: false # TEMP: mikzfix fast windows-only test build
+    if: ${{ inputs.all-platforms }}
     needs: [generate-bridge]
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
@@ -1391,7 +1396,7 @@ jobs:
             signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
 
   build-rustdesk-linux:
-    if: false # TEMP: mikzfix fast windows-only test build
+    if: ${{ inputs.all-platforms }}
     needs: [generate-bridge]
     name: build rustdesk linux ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.on }}
@@ -1729,7 +1734,7 @@ jobs:
             res/rustdesk-${{ env.VERSION }}*.zst
 
   build-rustdesk-linux-sciter:
-    if: false # TEMP: mikzfix fast windows-only test build
+    if: ${{ inputs.all-platforms }}
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:
