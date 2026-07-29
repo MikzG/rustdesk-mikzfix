@@ -1040,7 +1040,13 @@ pub fn get_custom_rendezvous_server(custom: String) -> String {
     if !config::PROD_RENDEZVOUS_SERVER.read().unwrap().is_empty() {
         return config::PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
     }
-    "".to_owned()
+    // mikzfix: fall back to the compiled-in server instead of "". Without this the client still
+    // CONNECTS correctly (Config::get_rendezvous_server has its own RENDEZVOUS_SERVERS fallback),
+    // but Settings > Network renders an EMPTY ID/Relay field, which looks unconfigured to users.
+    config::RENDEZVOUS_SERVERS
+        .first()
+        .map(|s| s.to_string())
+        .unwrap_or_default()
 }
 
 #[inline]
@@ -1071,16 +1077,13 @@ fn get_api_server_(api: String, custom: String) -> String {
     if !api.is_empty() {
         return api.to_owned();
     }
-    let s0 = get_custom_rendezvous_server(custom);
-    if !s0.is_empty() {
-        let s = crate::increase_port(&s0, -2);
-        if s == s0 {
-            return format!("http://{}:{}", s, config::RENDEZVOUS_PORT - 2);
-        } else {
-            return format!("http://{}", s);
-        }
-    }
-    "https://admin.rustdesk.com".to_owned()
+    // mikzfix: our self-hosted rustdesk-api (accounts, address book, permanent passwords).
+    // Returned BEFORE the rendezvous-derivation below on purpose: that path would produce
+    // http://remote.mikzfix.tech:21114, but our API service is bound to 127.0.0.1 and reached
+    // only via the Cloudflare tunnel at rdapi.mikzfix.tech. Upstream's final fallback is
+    // RustDesk's own admin.rustdesk.com, which is useless for this build.
+    let _ = custom;
+    "https://rdapi.mikzfix.tech".to_owned()
 }
 
 #[inline]
