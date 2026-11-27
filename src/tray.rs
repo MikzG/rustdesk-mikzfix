@@ -41,7 +41,14 @@ fn make_tray() -> hbb_common::ResultType<()> {
     }
 
     let (icon_rgba, icon_width, icon_height) = {
-        let image = load_icon_from_asset()
+        // mikzfix: only Linux takes the icon from the Flutter assets (assets/icon.png). On macOS
+        // it must stay the black-only template (a colour PNG used as a template becomes a solid
+        // blob), and on Windows the multi-size tray-icon.ico is sharper than a scaled PNG.
+        #[cfg(target_os = "linux")]
+        let asset = load_icon_from_asset();
+        #[cfg(not(target_os = "linux"))]
+        let asset: Option<image::DynamicImage> = None;
+        let image = asset
             .unwrap_or(image::load_from_memory(icon).context("Failed to open icon path")?)
             .into_rgba8();
         let (width, height) = image.dimensions();
@@ -73,7 +80,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let tooltip = |count: usize| {
         if count == 0 {
             format!(
-                "{} {}",
+                "{} - {}",
                 crate::get_app_name(),
                 translate("Service is running".to_owned()),
             )
@@ -270,6 +277,7 @@ async fn start_query_session_count(sender: std::sync::mpsc::Sender<Data>) {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn load_icon_from_asset() -> Option<image::DynamicImage> {
     let Some(path) = std::env::current_exe().map_or(None, |x| x.parent().map(|x| x.to_path_buf()))
     else {

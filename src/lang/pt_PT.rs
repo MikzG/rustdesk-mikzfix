@@ -10,7 +10,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("connecting_status", "A ligar à rede do RustDesk..."),
         ("Enable service", "Activar Serviço"),
         ("Start service", "Iniciar Serviço"),
-        ("Service is running", "Serviço está activo"),
+        ("Service is running", "Serviço ativo"),
         ("Service is not running", "Serviço não está activo"),
         ("not_ready_status", "Indisponível. Por favor verifique a sua ligação"),
         ("Control Remote Desktop", "Controle o Ambiente de Trabalho à distância"),
