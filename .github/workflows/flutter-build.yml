@@ -349,7 +349,8 @@ jobs:
           python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
           popd
           mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/MikzFix_RemoteDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
+          $suffix = if ('${{ matrix.job.arch }}' -eq 'aarch64') { '_arm64' } else { '' }
+          mv ./target/release/rustdesk-portable-packer.exe "./SignOutput/MikzFix_RemoteDesk$suffix.exe"
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
@@ -371,8 +372,9 @@ jobs:
           $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
           msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
-          mv $msi.FullName ../../SignOutput/MikzFix_RemoteDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
-          sha256sum ../../SignOutput/MikzFix_RemoteDesk-*.msi
+          $suffix = if ('${{ matrix.job.arch }}' -eq 'aarch64') { '_arm64' } else { '' }
+          mv $msi.FullName "../../SignOutput/MikzFix_RemoteDesk$suffix.msi"
+          sha256sum ../../SignOutput/MikzFix_RemoteDesk*.msi
 
       - name: Sign rustdesk self-extracted file
         if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
@@ -387,8 +389,8 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            ./SignOutput/MikzFix_RemoteDesk-*.msi
-            ./SignOutput/MikzFix_RemoteDesk-*.exe
+            ./SignOutput/MikzFix_RemoteDesk*.msi
+            ./SignOutput/MikzFix_RemoteDesk*.exe
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
   build-for-windows-sciter:
@@ -671,7 +673,7 @@ jobs:
       fail-fast: false
       matrix:
         # mikzfix: macos-arm-only keeps just the Apple Silicon entry.
-        job: ${{ fromJSON(inputs.macos-arm-only && '[{"target":"aarch64-apple-darwin","os":"macos-15","extra-build-args":"--screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]' || '[{"target":"x86_64-apple-darwin","os":"macos-15-intel","extra-build-args":"","arch":"x86_64","vcpkg-triplet":"x64-osx"},{"target":"aarch64-apple-darwin","os":"macos-15","extra-build-args":"--screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]') }}
+        job: ${{ fromJSON(inputs.macos-arm-only && '[{"target":"aarch64-apple-darwin","os":"macos-15","extra-build-args":"--screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx","dmg-name":"MikzFix_RemoteDesk_mac_apple_silicon.dmg"}]' || '[{"target":"x86_64-apple-darwin","os":"macos-15-intel","extra-build-args":"","arch":"x86_64","vcpkg-triplet":"x64-osx","dmg-name":"MikzFix_RemoteDesk_mac_intel.dmg"},{"target":"aarch64-apple-darwin","os":"macos-15","extra-build-args":"--screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx","dmg-name":"MikzFix_RemoteDesk_mac_apple_silicon.dmg"}]') }}
     steps:
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
@@ -831,14 +833,14 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$APP/Contents/Info.plist"
-          create-dmg --volname "MikzFix Remote" --icon "MikzFix Remote.app" 200 190 --hide-extension "MikzFix Remote.app" --window-size 800 400 --app-drop-link 600 185 MikzFix_RemoteDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg "$APP"
+          create-dmg --volname "MikzFix Remote" --icon "MikzFix Remote.app" 200 190 --hide-extension "MikzFix Remote.app" --window-size 800 400 --app-drop-link 600 185 "${{ matrix.job.dmg-name }}" "$APP"
 
       - name: Upload unsigned macOS app
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rustdesk-unsigned-macos-${{ matrix.job.arch }}
-          path: MikzFix_RemoteDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure, causing the codesign failed
+          path: ${{ matrix.job.dmg-name }} # can not upload the directory directly or tar.gz, which destroy the link structure, causing the codesign failed
 
       - name: Codesign app and create signed dmg
         if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
@@ -861,7 +863,7 @@ jobs:
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
-          # mikzfix: the unsigned DMG is already named MikzFix_RemoteDesk-<ver>-<arch>.dmg.
+          # mikzfix: the unsigned DMG already has its final simple name (matrix.job.dmg-name).
           for name in rustdesk*??.dmg; do
               [ -e "$name" ] || continue
               mv "$name" "${name%%.dmg}-${{ matrix.job.arch }}.dmg"
@@ -874,7 +876,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            MikzFix_RemoteDesk-*-${{ matrix.job.arch }}.dmg
+            ${{ matrix.job.dmg-name }}
 
   publish_unsigned:
     needs:

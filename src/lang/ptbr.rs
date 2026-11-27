@@ -785,5 +785,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_access_off_confirm", "Desligar o acesso sem PIN? A palavra-passe guardada neste computador é apagada."),
         ("mikzfix_access_off_button", "Desligar"),
         ("mikzfix_about_title", "Sobre o MikzFix Remote"),
+        ("mikzfix_install_title", "Instalar MikzFix Remote"),
+        ("mikzfix_install_tip", "Instala para a MikzFix te poder ajudar sem ter de te pedir o PIN."),
+        ("mikzfix_install_button", "Instalar"),
     ].iter().cloned().collect();
 }

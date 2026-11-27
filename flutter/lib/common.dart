@@ -3859,9 +3859,18 @@ class _LogoState extends State<_Logo> {
               return Container();
             },
           );
-          return Container(
-            constraints: BoxConstraints(maxWidth: 300, maxHeight: 60),
-            child: image,
+          // mikzfix: the TechFix logo opens mikzfix.tech in the system browser.
+          return MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => launchUrl(Uri.parse('https://mikzfix.tech/'),
+                  mode: LaunchMode.externalApplication),
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 300, maxHeight: 60),
+                child: image,
+              ),
+            ),
           ).marginOnly(left: 12, right: 12, top: 12);
         }
         return const Offstage();

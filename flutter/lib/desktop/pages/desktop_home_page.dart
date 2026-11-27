@@ -465,9 +465,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
     if (isWindows && !bind.isDisableInstallation()) {
       if (!bind.mainIsInstalled()) {
-        return buildInstallCard(
-            "", bind.isOutgoingOnly() ? "" : "install_tip", "Install",
-            () async {
+        // mikzfix: our own install card, shown even without login. The upstream one
+        // ("install_tip") is hidden by the builtin `hide-help-cards=Y`, but access without a
+        // PIN only works once the app is installed (service), so the portable must offer it.
+        return buildInstallCard("mikzfix_install_title",
+            bind.isOutgoingOnly() ? "" : "mikzfix_install_tip",
+            "mikzfix_install_button", () async {
           await rustDeskWinManager.closeAllSubWindows();
           bind.mainGotoInstall();
         });
@@ -584,7 +587,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       bool? closeButton,
       String? closeOption}) {
     if (bind.mainGetBuildinOption(key: kOptionHideHelpCards) == 'Y' &&
-        content != 'install_daemon_tip') {
+        content != 'install_daemon_tip' &&
+        content != 'mikzfix_install_tip') {
       return const SizedBox();
     }
     void closeCard() async {

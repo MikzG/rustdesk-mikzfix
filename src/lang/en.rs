@@ -296,5 +296,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_access_off_confirm", "Turn off access without PIN? The password stored on this computer is deleted."),
         ("mikzfix_access_off_button", "Turn off"),
         ("mikzfix_about_title", "About MikzFix Remote"),
+        ("mikzfix_install_title", "Install MikzFix Remote"),
+        ("mikzfix_install_tip", "Install it so MikzFix can help you without having to ask you for the PIN."),
+        ("mikzfix_install_button", "Install"),
     ].iter().cloned().collect();
 }
