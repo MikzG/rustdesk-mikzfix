@@ -3923,8 +3923,14 @@ const Size kMikzfixMainDefaultSize = Size(900, 600);
 Future<void> mikzfixApplyMainWindowMode() async {
   if (!isDesktop) return;
   if (bind.isIncomingOnly()) {
-    await windowManager.setSize(getIncomingOnlyHomeSize());
-    setResizable(false);
+    // Same sizes the tab page uses in incoming-only: compact Home, larger Settings.
+    if (isInHomePage()) {
+      await windowManager.setSize(getIncomingOnlyHomeSize());
+      setResizable(false);
+    } else {
+      await windowManager.setSize(getIncomingOnlySettingsSize());
+      setResizable(true);
+    }
   } else {
     setResizable(true);
     final s = await windowManager.getSize();

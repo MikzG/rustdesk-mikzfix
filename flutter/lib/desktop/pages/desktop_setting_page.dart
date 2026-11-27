@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:flutter/foundation.dart' show listEquals;
 import 'dart:convert';
 import 'dart:io';
 
@@ -65,7 +67,9 @@ enum SettingsTabKey {
 
 class DesktopSettingPage extends StatefulWidget {
   final SettingsTabKey initialTabkey;
-  static final List<SettingsTabKey> tabKeys = [
+  // mikzfix: a getter, not a `static final`: which tabs exist depends on login
+  // (isDisableSettings / isIncomingOnly), and that changes at runtime on login/logout.
+  static List<SettingsTabKey> get tabKeys => [
     SettingsTabKey.general,
     if (!isWeb &&
         !bind.isOutgoingOnly() &&
@@ -156,9 +160,40 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
     }
   }
 
+  // mikzfix: rebuild the tab list on login/logout without restarting the app.
+  StreamSubscription? _mikzfixLoginSub;
+  List<SettingsTabKey> _mikzfixKeys = DesktopSettingPage.tabKeys;
+
+  void _mikzfixOnLoginChanged() {
+    // Same delay as mikzfixApplyMainWindowMode: access_token is stored just after userName.
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      final keys = DesktopSettingPage.tabKeys;
+      if (listEquals(keys, _mikzfixKeys)) return;
+      _mikzfixKeys = keys;
+      // Keep the selected tab if it still exists; otherwise (logout from a locked tab) go to
+      // Account, where the user just logged out, or to the first tab.
+      var target = selectedTab.value;
+      if (!keys.contains(target)) {
+        target = keys.contains(SettingsTabKey.account)
+            ? SettingsTabKey.account
+            : keys.first;
+      }
+      setState(() {});
+      selectedTab.value = target;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !controller.hasClients) return;
+        final index = keys.indexOf(target);
+        if (index >= 0) controller.jumpToPage(index);
+      });
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    _mikzfixLoginSub =
+        gFFI.userModel.userName.listen((_) => _mikzfixOnLoginChanged());
     WidgetsBinding.instance.addObserver(this);
     _videoConnTimer =
         periodic_immediate(Duration(milliseconds: 1000), () async {
@@ -171,6 +206,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
 
   @override
   void dispose() {
+    _mikzfixLoginSub?.cancel();
     super.dispose();
     Get.delete<PageController>(tag: _kSettingPageControllerTag);
     Get.delete<RxInt>(tag: _kSettingPageTabKeyTag);
