@@ -788,5 +788,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_install_title", "Instalar MikzFix Remote"),
         ("mikzfix_install_tip", "Instala para a MikzFix te poder ajudar sem ter de te pedir o PIN."),
         ("mikzfix_install_button", "Instalar"),
+        ("mikzfix_access_question", "Permitir que a MikzFix aceda a este PC?"),
+        ("mikzfix_see_more", "Ver mais"),
+        ("mikzfix_see_less", "Ver menos"),
     ].iter().cloned().collect();
 }

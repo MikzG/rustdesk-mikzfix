@@ -788,5 +788,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_install_title", ""),
         ("mikzfix_install_tip", ""),
         ("mikzfix_install_button", ""),
+        ("mikzfix_access_question", ""),
+        ("mikzfix_see_more", ""),
+        ("mikzfix_see_less", ""),
     ].iter().cloned().collect();
 }

@@ -447,6 +447,12 @@ def prepare_resources():
     if icon_src.exists():
         icon_dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(icon_src, icon_dst)
+        # mikzfix: WiX UI bitmaps with our brand (Package/Resources is git-ignored, so the
+        # tracked copies live in res/msi/branding and are copied here; gen_custom_dialog_bitmaps
+        # then emits the WixVariable lines for the ones that exist).
+        branding = Path(sys.argv[0]).parent.joinpath("branding")
+        for bmp in branding.glob("WixUI*.bmp"):
+            shutil.copy(bmp, icon_dst.parent.joinpath(bmp.name))
         return True
     else:
         # unreachable

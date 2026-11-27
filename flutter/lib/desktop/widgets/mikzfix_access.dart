@@ -31,33 +31,68 @@ Future<void> mikzfixMaybeAskConsent() async {
     await bind.mainSetOption(key: kOptionMikzfixUnattended, value: 'N');
     return;
   }
+  var expanded = false;
   gFFI.dialogManager.show((setState, close, context) {
-    final note = Theme.of(context).textTheme.bodySmall;
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall;
+    Future<void> answer(String v) async {
+      await bind.mainSetOption(key: kOptionMikzfixUnattended, value: v);
+      close();
+    }
+
+    // Our own buttons, equal width, primary on the right; stacked with spacing when the
+    // window is too narrow for two side by side.
+    final notNow = dialogButton(translate('mikzfix_access_not_now'),
+        isOutline: true, onPressed: () => answer('N'));
+    final allow =
+        dialogButton(translate('mikzfix_access_allow'), onPressed: () => answer('Y'));
+    // (No LayoutBuilder: AlertDialog sizes its content with IntrinsicWidth.)
+    final narrow = MediaQuery.of(context).size.width < 360;
+    final Widget buttons = narrow
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [allow, const SizedBox(height: 10), notNow],
+          )
+        : Row(children: [
+            Expanded(child: notNow),
+            const SizedBox(width: 10),
+            Expanded(child: allow),
+          ]);
+
     return CustomAlertDialog(
-      title: Text(translate('mikzfix_access_title')),
+      title: Text(translate('mikzfix_access_question'),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600)),
+      contentBoxConstraints: const BoxConstraints(maxWidth: 340),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(translate('mikzfix_access_text')),
-          const SizedBox(height: 12),
-          Opacity(
-            opacity: 0.7,
-            child: Text(translate('mikzfix_access_note'), style: note),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => setState(() => expanded = !expanded),
+              child: Text(
+                translate(expanded ? 'mikzfix_see_less' : 'mikzfix_see_more'),
+                style: small?.copyWith(
+                    color: theme.colorScheme.primary,
+                    decoration: TextDecoration.underline),
+              ),
+            ),
           ),
+          if (expanded) ...[
+            const SizedBox(height: 8),
+            Text(translate('mikzfix_access_text'), style: small),
+            const SizedBox(height: 8),
+            Opacity(
+              opacity: 0.7,
+              child: Text(translate('mikzfix_access_note'), style: small),
+            ),
+          ],
+          const SizedBox(height: 16),
+          buttons,
         ],
       ),
-      actions: [
-        dialogButton(translate('mikzfix_access_not_now'), isOutline: true,
-            onPressed: () async {
-          await bind.mainSetOption(key: kOptionMikzfixUnattended, value: 'N');
-          close();
-        }),
-        dialogButton(translate('mikzfix_access_allow'), onPressed: () async {
-          await bind.mainSetOption(key: kOptionMikzfixUnattended, value: 'Y');
-          close();
-        }),
-      ],
     );
   }, clickMaskDismiss: false, backDismiss: false, tag: 'mikzfix-consent');
 }
