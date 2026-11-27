@@ -10,6 +10,10 @@ on:
         description: "Prerelease tag to publish to (never nightly)"
         type: string
         default: "mikzfix-remote-v2-test"
+      macos-arm-only:
+        description: "Only the macOS Apple Silicon DMG (fast check). Off: Windows, macOS arm64 + Intel, Linux and Android"
+        type: boolean
+        default: false
 
 jobs:
   guard:
@@ -27,5 +31,6 @@ jobs:
     with:
       upload-artifact: true
       upload-tag: ${{ inputs.upload-tag }}
-      all-platforms: false
-      macos-arm-only: true
+      all-platforms: ${{ !inputs.macos-arm-only }}
+      macos-arm-only: ${{ inputs.macos-arm-only }}
+      extras: false

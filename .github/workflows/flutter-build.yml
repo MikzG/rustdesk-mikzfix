@@ -18,6 +18,10 @@ on:
       macos-arm-only:
         type: boolean
         default: false
+      # mikzfix: false skips iOS and the Linux sciter/flatpak builds in an all-platforms run.
+      extras:
+        type: boolean
+        default: true
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -545,7 +549,7 @@ jobs:
             ./SignOutput/rustdesk-*.exe
 
   build-rustdesk-ios:
-    if: ${{ inputs.all-platforms }}
+    if: ${{ inputs.all-platforms && inputs.extras }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -1737,7 +1741,7 @@ jobs:
             res/rustdesk-${{ env.VERSION }}*.zst
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.all-platforms }}
+    if: ${{ inputs.all-platforms && inputs.extras }}
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:
