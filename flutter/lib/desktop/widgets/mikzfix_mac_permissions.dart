@@ -9,6 +9,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/desktop/widgets/mikzfix_access.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
 
 const kMikzfixBundleId = 'tech.mikzfix.remote';
 const _kPane = 'x-apple.systempreferences:com.apple.preference.security?';
@@ -52,13 +53,27 @@ extension _PermInfo on MikzfixMacPerm {
     }
   }
 
-  /// First the native request (src/platform/macos.mm / macos.rs):
-  /// Screen Recording: CGPreflightScreenCaptureAccess + CGRequestScreenCaptureAccess;
-  /// Accessibility: AXIsProcessTrustedWithOptions with kAXTrustedCheckOptionPrompt;
-  /// Input Monitoring: IOHIDCheckAccess + IOHIDRequestAccess(kIOHIDRequestTypeListenEvent).
-  /// Only if it is still denied ~1 s later, the exact Settings pane opens. Full Disk Access
-  /// has no request API, so its pane opens directly.
+  String get _askedKey => 'mikzfix-perm-asked-$name';
+
+  /// Native request first (src/platform/macos.mm / macos.rs). How each API behaves:
+  /// - Screen Recording: CGRequestScreenCaptureAccess shows the system alert only the first
+  ///   time for this app (it has its own "Open System Settings" button); later calls show
+  ///   nothing and just return false.
+  /// - Accessibility: AXIsProcessTrustedWithOptions(prompt) shows the "would like to control
+  ///   this computer" alert (with "Open System Settings") and returns at once, not waiting.
+  /// - Input Monitoring: IOHIDRequestAccess shows the alert only the first time.
+  /// None of them tells us when the alert is answered, so:
+  /// - first time: only the native request, then after ~2 s open our Settings pane only if
+  ///   still denied AND our window has focus again (while the system alert is up, or after the
+  ///   user went to Settings from it, our window is not focused);
+  /// - after that (the system will not show its alert again): open the pane directly.
+  /// Full Disk Access has no request API: its pane opens directly.
   Future<void> request() async {
+    if (this == MikzfixMacPerm.fullDisk) {
+      await launchUrl(Uri.parse(pane));
+      return;
+    }
+    final askedBefore = bind.mainGetLocalOption(key: _askedKey) == 'Y';
     switch (this) {
       case MikzfixMacPerm.screen:
         bind.mainIsCanScreenRecording(prompt: true);
@@ -70,13 +85,20 @@ extension _PermInfo on MikzfixMacPerm {
         bind.mainIsCanInputMonitoring(prompt: true);
         break;
       case MikzfixMacPerm.fullDisk:
-        await launchUrl(Uri.parse(pane));
-        return;
+        break;
     }
-    await Future.delayed(const Duration(seconds: 1));
-    if (!granted()) {
-      await launchUrl(Uri.parse(pane));
+    if (askedBefore) {
+      if (!granted()) await launchUrl(Uri.parse(pane));
+      return;
     }
+    await bind.mainSetLocalOption(key: _askedKey, value: 'Y');
+    await Future.delayed(const Duration(seconds: 2));
+    if (granted()) return;
+    var focused = true;
+    try {
+      focused = await windowManager.isFocused();
+    } catch (_) {}
+    if (focused) await launchUrl(Uri.parse(pane));
   }
 }
 
