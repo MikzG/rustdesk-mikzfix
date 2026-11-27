@@ -1202,23 +1202,26 @@ jobs:
           name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
           path: ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
 
-      - name: Publish signed apk package
-        if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
-        with:
-          prerelease: true
-          tag_name: ${{ env.TAG_NAME }}
-          files: |
-            ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
+      - name: Simple release names (mikzfix)
+        if: env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          F="${{ steps.sign-rustdesk.outputs.signedReleaseFile }}"
+          [ -n "$F" ] && [ -f "$F" ] || F="signed-apk/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk"
+          case "${{ matrix.job.arch }}" in aarch64) S=_arm64;; armv7) S=_armv7;; x86_64) S=_x86_64;; x86) S=_x86;; *) S=_${{ matrix.job.arch }};; esac
+          N="MikzFix_RemoteDesk$S.apk"
+          mkdir -p release
+          cp "$F" "release/$N"
+          ls -l release
 
-      - name: Publish unsigned apk package
-        if: env.ANDROID_SIGNING_KEY == null && env.UPLOAD_ARTIFACT == 'true'
+      - name: Publish apk package
+        if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            signed-apk/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
+            release/MikzFix_RemoteDesk*.apk
 
   build-rustdesk-android-universal:
     needs: [build-rustdesk-android]
@@ -1386,23 +1389,25 @@ jobs:
           name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
           path: ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
 
-      - name: Publish signed apk package
-        if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
-        with:
-          prerelease: true
-          tag_name: ${{ env.TAG_NAME }}
-          files: |
-            ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
+      - name: Simple release names (mikzfix)
+        if: env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          F="${{ steps.sign-rustdesk.outputs.signedReleaseFile }}"
+          [ -n "$F" ] && [ -f "$F" ] || F="signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk"
+          N=MikzFix_RemoteDesk.apk
+          mkdir -p release
+          cp "$F" "release/$N"
+          ls -l release
 
-      - name: Publish unsigned apk package
-        if: env.ANDROID_SIGNING_KEY == null && env.UPLOAD_ARTIFACT == 'true'
+      - name: Publish apk package
+        if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
+            release/MikzFix_RemoteDesk*.apk
 
   build-rustdesk-linux:
     if: ${{ inputs.all-platforms }}
@@ -1697,6 +1702,19 @@ jobs:
                 mv "$name" /workspace/"${name%%.rpm}-suse.rpm"
             done
 
+      - name: Simple release names (mikzfix)
+        if: env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          case "${{ matrix.job.arch }}" in x86_64) S=;; aarch64) S=_arm64;; *) S=_${{ matrix.job.arch }};; esac
+          mkdir -p release
+          for f in rustdesk-*.deb; do [ -e "$f" ] && cp "$f" "release/MikzFix_RemoteDesk$S.deb"; done
+          for f in rustdesk-*.rpm; do
+            [ -e "$f" ] || continue
+            case "$f" in *-suse.rpm) cp "$f" "release/MikzFix_RemoteDesk${S}_suse.rpm";; *) cp "$f" "release/MikzFix_RemoteDesk$S.rpm";; esac
+          done
+          ls -l release
+
       - name: Publish debian/rpm package
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
@@ -1704,8 +1722,8 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            rustdesk-*.deb
-            rustdesk-*.rpm
+            release/MikzFix_RemoteDesk*.deb
+            release/MikzFix_RemoteDesk*.rpm
 
       - name: Upload deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1733,6 +1751,14 @@ jobs:
           scripts: |
             cd res && HBB=`pwd`/.. FLUTTER=1 makepkg -f
 
+      - name: Simple release name, archlinux (mikzfix)
+        if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          mkdir -p release
+          for f in res/rustdesk-${{ env.VERSION }}*.zst; do [ -e "$f" ] && cp "$f" release/MikzFix_RemoteDesk.pkg.tar.zst; done
+          ls -l release
+
       - name: Publish archlinux package
         if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
@@ -1740,7 +1766,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            res/rustdesk-${{ env.VERSION }}*.zst
+            release/MikzFix_RemoteDesk.pkg.tar.zst
 
   build-rustdesk-linux-sciter:
     if: ${{ inputs.all-platforms && inputs.extras }}
@@ -2011,6 +2037,15 @@ jobs:
           pushd appimage
           sudo appimage-builder --skip-tests --recipe ./AppImageBuilder-${{ matrix.job.arch }}.yml
 
+      - name: Simple release names (mikzfix)
+        if: env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          case "${{ matrix.job.arch }}" in x86_64) S=;; aarch64) S=_arm64;; *) S=_${{ matrix.job.arch }};; esac
+          mkdir -p release
+          for f in ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage; do [ -e "$f" ] && cp "$f" "release/MikzFix_RemoteDesk$S.AppImage"; done
+          ls -l release
+
       - name: Publish appimage package
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
@@ -2018,7 +2053,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage
+            release/MikzFix_RemoteDesk*.AppImage
 
   build-flatpak:
     name: Build flatpak ${{ matrix.job.target }}${{ matrix.job.suffix }}
