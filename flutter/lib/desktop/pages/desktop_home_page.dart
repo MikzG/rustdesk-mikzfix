@@ -47,6 +47,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   // mikzfix: login/logout switches incoming-only on and off; resize and rebuild live.
   StreamSubscription? _mikzfixLoginSub;
   bool? _mikzfixWasIncomingOnly;
+  bool? _mikzfixFda;
   var svcStopped = false.obs;
   var watchIsCanScreenRecording = false;
   var watchIsProcessTrust = false;
@@ -522,6 +523,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           // LaunchDaemon/LaunchAgent and loads them.
           bind.mainIsInstalledDaemon(prompt: true);
         });
+      } else if (!isOutgoingOnly &&
+          bind.mainGetLocalOption(key: kMikzfixFdaCardOption) != 'N' &&
+          !mikzfixHasFullDiskAccess()) {
+        // mikzfix: OPTIONAL, after the required permissions and the service. macOS cannot
+        // request Full Disk Access programmatically, so open the right Settings pane.
+        // Closing the card (X) hides it for good.
+        return buildInstallCard("mikzfix_fda_title", "mikzfix_fda_tip",
+            "mikzfix_fda_button", () async {
+          await launchUrl(Uri.parse(
+              'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'));
+        }, closeButton: true, closeOption: kMikzfixFdaCardOption);
       }
       //// Disable microphone configuration for macOS. We will request the permission when needed.
       // else if ((await osxCanRecordAudio() !=
@@ -749,6 +761,14 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       if (systemError != error) {
         systemError = error;
         setState(() {});
+      }
+      // mikzfix: hide the optional Full Disk Access card as soon as it is granted.
+      if (isMacOS) {
+        final fda = mikzfixHasFullDiskAccess();
+        if (fda != _mikzfixFda) {
+          _mikzfixFda = fda;
+          setState(() {});
+        }
       }
       final v = await mainGetBoolOption(kOptionStopService);
       if (v != svcStopped.value) {

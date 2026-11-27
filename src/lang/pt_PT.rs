@@ -801,5 +801,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_mac_screen_tip", "Dá a permissão de Gravação de ecrã para a MikzFix ver o teu ecrã."),
         ("mikzfix_mac_acc_tip", "Dá a permissão de Acessibilidade para a MikzFix poder usar o rato e o teclado."),
         ("mikzfix_mac_input_tip", "Dá a permissão de Monitorização de entrada para o teclado funcionar."),
+        ("mikzfix_fda_title", "Acesso total ao disco (para transferir ficheiros)"),
+        ("mikzfix_fda_tip", "Opcional. Deixa a MikzFix transferir ficheiros de qualquer pasta, incluindo discos externos e de rede. Sem isto, o macOS pede autorização pasta a pasta. Em Definições, ativa o MikzFix Remote em Acesso total ao disco."),
+        ("mikzfix_fda_button", "Abrir Definições"),
     ].iter().cloned().collect();
 }

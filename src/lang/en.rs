@@ -312,5 +312,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_mac_screen_tip", "Allow Screen Recording so MikzFix can see your screen."),
         ("mikzfix_mac_acc_tip", "Allow Accessibility so MikzFix can use the mouse and keyboard."),
         ("mikzfix_mac_input_tip", "Allow Input Monitoring so the keyboard works."),
+        ("mikzfix_fda_title", "Full Disk Access (for file transfer)"),
+        ("mikzfix_fda_tip", "Optional. Lets MikzFix transfer files from any folder, including external and network drives. Without it, macOS asks folder by folder. In Settings, turn on MikzFix Remote under Full Disk Access."),
+        ("mikzfix_fda_button", "Open Settings"),
     ].iter().cloned().collect();
 }

@@ -4,6 +4,7 @@
 // usual IPC and does the work (generate the password, enrol, revoke, delete the password).
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
@@ -21,6 +22,29 @@ bool mikzfixIsLoggedIn() {
 
 /// Shows the first-run consent once, on an installed desktop app, when nobody is logged in.
 /// A logged-in machine (Miguel's) is never asked and stays "N".
+/// Local option: "N" once the user closed the optional Full Disk Access card.
+const kMikzfixFdaCardOption = 'mikzfix-fda-card';
+
+/// macOS Full Disk Access check without any prompt: these paths are readable only with FDA
+/// (TCC.db) or are TCC-protected user data (Safari). Never asks, never writes.
+bool mikzfixHasFullDiskAccess() {
+  if (!Platform.isMacOS) return true;
+  try {
+    final f = File('/Library/Application Support/com.apple.TCC/TCC.db')
+        .openSync(mode: FileMode.read);
+    f.closeSync();
+    return true;
+  } catch (_) {}
+  try {
+    final home = Platform.environment['HOME'] ?? '';
+    if (home.isNotEmpty) {
+      Directory('$home/Library/Safari').listSync();
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 /// "Installed" for unattended access: the app is installed AND, on macOS, the LaunchDaemon /
 /// LaunchAgent pair is installed (being in /Applications is not enough: without the daemon
 /// the GUI itself is the server and the enrolment loop never runs).
