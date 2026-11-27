@@ -22,6 +22,103 @@ bool mikzfixIsLoggedIn() {
 
 /// Shows the first-run consent once, on an installed desktop app, when nobody is logged in.
 /// A logged-in machine (Miguel's) is never asked and stays "N".
+/// "Start at login" (service option; empty = on, the default). Windows: the service keeps the
+/// tray Startup shortcut in step. macOS: a per-user LaunchAgent written here (no admin).
+/// Linux: unchanged, the existing autostart entry.
+const kOptionMikzfixStartAtLogin = 'mikzfix-start-at-login';
+const _kMacStartupLabel = 'tech.mikzfix.remote.startup';
+
+bool mikzfixStartAtLoginSupported() =>
+    (isWindows || isMacOS) && bind.mainIsInstalled();
+
+bool mikzfixStartAtLoginOn() =>
+    bind.mainGetOptionSync(key: kOptionMikzfixStartAtLogin) != 'N';
+
+String _macStartupPlistPath() =>
+    '${Platform.environment['HOME'] ?? ''}/Library/LaunchAgents/$_kMacStartupLabel.plist';
+
+Future<void> _macApplyStartAtLogin(bool on) async {
+  final f = File(_macStartupPlistPath());
+  try {
+    if (!on) {
+      if (await f.exists()) await f.delete();
+      return;
+    }
+    final exe = Platform.resolvedExecutable;
+    final plist = '''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$_kMacStartupLabel</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$exe</string>
+        <string>--tray</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+</dict>
+</plist>
+''';
+    await f.parent.create(recursive: true);
+    if (!await f.exists() || await f.readAsString() != plist) {
+      await f.writeAsString(plist);
+    }
+  } catch (e) {
+    debugPrint('mikzfix start-at-login (mac) failed: $e');
+  }
+}
+
+Future<void> mikzfixSetStartAtLogin(bool on) async {
+  await bind.mainSetOption(key: kOptionMikzfixStartAtLogin, value: on ? 'Y' : 'N');
+  if (isMacOS) await _macApplyStartAtLogin(on);
+}
+
+/// At app start: make the macOS LaunchAgent match the option (on by default once installed).
+Future<void> mikzfixApplyStartAtLoginAtStartup() async {
+  if (!isMacOS || !mikzfixStartAtLoginSupported()) return;
+  await Future.delayed(const Duration(seconds: 3));
+  await _macApplyStartAtLogin(mikzfixStartAtLoginOn());
+}
+
+class MikzfixStartAtLoginTile extends StatefulWidget {
+  const MikzfixStartAtLoginTile({Key? key}) : super(key: key);
+  @override
+  State<MikzfixStartAtLoginTile> createState() => _MikzfixStartAtLoginTileState();
+}
+
+class _MikzfixStartAtLoginTileState extends State<MikzfixStartAtLoginTile> {
+  late bool _on = mikzfixStartAtLoginOn();
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(children: [
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(translate('mikzfix_start_login'),
+              style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 2),
+          Opacity(
+              opacity: 0.7,
+              child: Text(translate('mikzfix_start_login_tip'),
+                  style: theme.textTheme.bodySmall)),
+        ]),
+      ),
+      Switch(
+        value: _on,
+        activeColor: theme.colorScheme.primary,
+        onChanged: (v) async {
+          setState(() => _on = v);
+          await mikzfixSetStartAtLogin(v);
+        },
+      ),
+    ]);
+  }
+}
+
 /// Local option: "N" once the user closed the optional Full Disk Access card.
 const kMikzfixFdaCardOption = 'mikzfix-fda-card';
 

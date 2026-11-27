@@ -722,6 +722,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.initState();
     // mikzfix: first-run consent for MikzFix access (installed app, no login).
     mikzfixMaybeAskConsent();
+    mikzfixApplyStartAtLoginAtStartup();
     // mikzfix: on macOS, open the permissions window at start while a required one is missing
     // (not for a logged-in technician, who can open it from Settings > Security).
     if (isMacOS) {

@@ -85,6 +85,7 @@ class DesktopSettingPage extends StatefulWidget {
       SettingsTabKey.plugin,
     if (!bind.isDisableAccount()) SettingsTabKey.account,
     if (isWindows &&
+        !bind.isDisableSettings() &&
         bind.mainGetBuildinOption(key: kOptionHideRemotePrinterSetting) != 'Y')
       SettingsTabKey.printer,
     SettingsTabKey.about,
@@ -449,9 +450,36 @@ class _GeneralState extends State<_General> {
   @override
   Widget build(BuildContext context) {
     final scrollController = ScrollController();
+    // mikzfix: without login, a minimal General with only "Start at login" and the MikzFix
+    // access switch; the rest stays locked until login.
+    if (bind.isDisableSettings()) {
+      return ListView(
+        controller: scrollController,
+        children: [
+          if (mikzfixStartAtLoginSupported())
+            _Card(title: 'mikzfix_start_login', children: [
+              const MikzfixStartAtLoginTile().marginSymmetric(vertical: 8),
+            ]),
+          if (mikzfixServiceReady())
+            _Card(title: 'mikzfix_access_title', children: [
+              const MikzfixAccessCard(compact: false)
+                  .marginSymmetric(vertical: 8),
+            ]),
+          Opacity(
+            opacity: 0.7,
+            child: Text(translate('mikzfix_general_locked_tip'),
+                style: Theme.of(context).textTheme.bodySmall),
+          ).marginOnly(left: _kContentHMargin, top: 12),
+        ],
+      ).marginOnly(bottom: _kListViewBottomMargin);
+    }
     return ListView(
       controller: scrollController,
       children: [
+        if (mikzfixStartAtLoginSupported())
+          _Card(title: 'mikzfix_start_login', children: [
+            const MikzfixStartAtLoginTile().marginSymmetric(vertical: 8),
+          ]),
         if (!isWeb) service(),
         theme(),
         _Card(title: 'Language', children: [language()]),

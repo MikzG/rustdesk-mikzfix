@@ -3687,6 +3687,37 @@ oLink.Save
     .to_owned())
 }
 
+/// mikzfix: "Start at login". Keeps (or removes) the all-users Startup shortcut that starts the
+/// tray at logon, the same shortcut the installer creates. Called from the service process
+/// (SYSTEM), which can write %PROGRAMDATA% without a UAC prompt.
+pub fn mikzfix_sync_tray_autostart(want: bool) -> ResultType<()> {
+    let app_name = crate::get_app_name();
+    let program_data =
+        std::env::var("PROGRAMDATA").unwrap_or_else(|_| "C:\\ProgramData".to_owned());
+    let lnk = format!(
+        "{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{} Tray.lnk",
+        program_data, app_name
+    );
+    let exists = std::path::Path::new(&lnk).exists();
+    if !want && exists {
+        std::fs::remove_file(&lnk)?;
+    } else if want && !exists {
+        let (_, path, _, exe) = get_install_info();
+        let tmp_path = std::env::temp_dir().to_string_lossy().to_string();
+        let vbs = get_tray_shortcut(&path, &exe, &exe, &tmp_path)?;
+        let status = std::process::Command::new("cscript")
+            .arg("//nologo")
+            .arg(&vbs)
+            .creation_flags(CREATE_NO_WINDOW)
+            .status()?;
+        if !status.success() {
+            bail!("cscript failed creating the tray shortcut");
+        }
+        std::fs::copy(format!("{}\\{} Tray.lnk", tmp_path, app_name), &lnk)?;
+    }
+    Ok(())
+}
+
 fn get_import_config(exe: &str) -> String {
     if config::is_outgoing_only() {
         return "".to_string();
@@ -3716,7 +3747,7 @@ if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{ap
     } else {
         format!("
 sc create \"{app_name}\" binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
-sc description \"{app_name}\" \"MikzFix Remote: suporte remoto da MikzFix (mikzfix.tech)\"
+sc description \"{app_name}\" \"MikzFix Remote support service (mikzfix.tech)\"
 sc start \"{app_name}\"
 ",
     app_name = crate::get_app_name())

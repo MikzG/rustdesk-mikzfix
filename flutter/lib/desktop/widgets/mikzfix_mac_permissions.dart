@@ -52,9 +52,12 @@ extension _PermInfo on MikzfixMacPerm {
     }
   }
 
-  /// The system request where macOS has one (Screen Recording: CGRequestScreenCaptureAccess,
-  /// Accessibility: AXIsProcessTrustedWithOptions, Input Monitoring: IOHIDRequestAccess), then
-  /// the exact Settings pane. Full Disk Access cannot be requested, only the pane opened.
+  /// First the native request (src/platform/macos.mm / macos.rs):
+  /// Screen Recording: CGPreflightScreenCaptureAccess + CGRequestScreenCaptureAccess;
+  /// Accessibility: AXIsProcessTrustedWithOptions with kAXTrustedCheckOptionPrompt;
+  /// Input Monitoring: IOHIDCheckAccess + IOHIDRequestAccess(kIOHIDRequestTypeListenEvent).
+  /// Only if it is still denied ~1 s later, the exact Settings pane opens. Full Disk Access
+  /// has no request API, so its pane opens directly.
   Future<void> request() async {
     switch (this) {
       case MikzfixMacPerm.screen:
@@ -67,10 +70,13 @@ extension _PermInfo on MikzfixMacPerm {
         bind.mainIsCanInputMonitoring(prompt: true);
         break;
       case MikzfixMacPerm.fullDisk:
-        break;
+        await launchUrl(Uri.parse(pane));
+        return;
     }
-    await Future.delayed(const Duration(milliseconds: 500));
-    await launchUrl(Uri.parse(pane));
+    await Future.delayed(const Duration(seconds: 1));
+    if (!granted()) {
+      await launchUrl(Uri.parse(pane));
+    }
   }
 }
 
@@ -232,6 +238,12 @@ class _MikzfixMacPermissionsViewState
     final ok = _state[p] == true;
     final selected = p == _selected;
     final small = theme.textTheme.bodySmall;
+    const green = Color(0xFF22A06B);
+    const red = Color(0xFFD9534F);
+    const grey = Color(0xFF9AA0A6);
+    final statusColor = ok ? green : (p.optional ? grey : red);
+    // Name + status on one line, description below, the button on its own line under the
+    // text: nothing can overlap whatever the width.
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: () => setState(() => _selected = p),
@@ -246,6 +258,7 @@ class _MikzfixMacPermissionsViewState
                   : theme.dividerColor.withOpacity(0.5)),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(p.icon, size: 22, color: theme.colorScheme.primary),
             const SizedBox(width: 12),
@@ -253,63 +266,66 @@ class _MikzfixMacPermissionsViewState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Text(translate(p.nameKey),
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    if (p.optional) ...[
-                      const SizedBox(width: 6),
-                      Text('(${translate('mikzfix_perm_optional')})',
-                          style: small),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 2,
+                    children: [
+                      Text(translate(p.nameKey),
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                      if (p.optional)
+                        Text('(${translate('mikzfix_perm_optional')})',
+                            style: small),
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(ok ? Icons.check_circle : Icons.cancel,
+                            size: 15, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                            translate(ok
+                                ? 'mikzfix_perm_granted'
+                                : 'mikzfix_perm_denied'),
+                            style: small?.copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.w600)),
+                      ]),
                     ],
-                  ]),
-                  const SizedBox(height: 2),
+                  ),
+                  const SizedBox(height: 3),
                   Text(translate(p.descKey), style: small),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: ok
-                            ? const Color(0xFF22A06B)
-                            : (p.optional
-                                ? const Color(0xFFB0B4BA)
-                                : const Color(0xFFD9534F)),
-                      ),
+                  if (!ok) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () {
+                        setState(() => _selected = p);
+                        p.request();
+                      },
+                      child: Text(translate('mikzfix_fda_button')),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                        translate(ok
-                            ? 'mikzfix_perm_granted'
-                            : 'mikzfix_perm_denied'),
-                        style: small),
-                  ]),
+                  ],
                 ],
               ),
             ),
-            if (!ok)
-              OutlinedButton(
-                onPressed: () {
-                  setState(() => _selected = p);
-                  p.request();
-                },
-                child: Text(translate('mikzfix_fda_button')),
-              ),
           ],
         ),
       ),
     );
   }
 
-  /// Left side: our simple drawing of the Settings switch for the selected permission, and
-  /// the steps.
+  /// Left side: the path in the user's macOS version (System Settings on 13+, System
+  /// Preferences on 12 and older), drawn by us in the macOS style with our icon, following
+  /// the app theme and language; then the short steps.
   Widget _guide(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.bodySmall;
-    final name = translate(_selected.nameKey);
-    Widget step(int n, Widget child) => Padding(
+    final modern = mikzfixMacMajorVersion() >= 13;
+    final perm = translate(_selected.macNameKey);
+    final app = translate(modern ? 'mikzfix_mac_sys_settings' : 'mikzfix_mac_sys_prefs');
+    final section = translate(
+        modern ? 'mikzfix_mac_privacy_security' : 'mikzfix_mac_security_privacy');
+    TextSpan b(String s) =>
+        TextSpan(text: s, style: const TextStyle(fontWeight: FontWeight.w600));
+    Widget step(int n, List<InlineSpan> spans) => Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
@@ -322,7 +338,7 @@ class _MikzfixMacPermissionsViewState
                   style: const TextStyle(color: Colors.white, fontSize: 11)),
             ),
             const SizedBox(width: 8),
-            Expanded(child: child),
+            Expanded(child: Text.rich(TextSpan(style: small, children: spans))),
           ]),
         );
     return Container(
@@ -335,66 +351,248 @@ class _MikzfixMacPermissionsViewState
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drawing: a Settings-like list row with our icon and an "on" switch.
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
+          MikzfixMacSettingsIllustration(
+              modern: modern, perm: _selected, permName: perm),
+          const SizedBox(height: 14),
+          step(1, [
+            TextSpan(text: '${translate('mikzfix_perm_step1')} '),
+          ]),
+          step(2, [
+            TextSpan(text: '${translate('mikzfix_perm_step_path')} '),
+            b(app),
+            const TextSpan(text: ' › '),
+            b(section),
+            if (!modern) ...[
+              const TextSpan(text: ' › '),
+              b(translate('mikzfix_mac_privacy')),
+            ],
+            const TextSpan(text: ' › '),
+            b(perm),
+            const TextSpan(text: '.'),
+          ]),
+          step(3, [TextSpan(text: translate('mikzfix_perm_step_toggle'))]),
+          step(4, [TextSpan(text: translate('mikzfix_perm_step3'))]),
+        ],
+      ),
+    );
+  }
+}
+
+/// macOS major version (e.g. 14), 0 if unknown.
+int mikzfixMacMajorVersion() {
+  if (!Platform.isMacOS) return 0;
+  final m = RegExp(r'(\d+)\.').firstMatch(Platform.operatingSystemVersion) ??
+      RegExp(r'(\d+)').firstMatch(Platform.operatingSystemVersion);
+  return int.tryParse(m?.group(1) ?? '') ?? 0;
+}
+
+extension _MacName on MikzfixMacPerm {
+  /// Apple's own name of the Privacy item, in the app language.
+  String get macNameKey => const {
+        MikzfixMacPerm.screen: 'mikzfix_mac_name_screen',
+        MikzfixMacPerm.accessibility: 'mikzfix_mac_name_acc',
+        MikzfixMacPerm.input: 'mikzfix_mac_name_input',
+        MikzfixMacPerm.fullDisk: 'mikzfix_mac_name_fda',
+      }[this]!;
+}
+
+/// Our drawing of the macOS Settings window at the right place, light or dark with the app
+/// theme. No screenshots: plain shapes, the app icon and translated labels.
+class MikzfixMacSettingsIllustration extends StatelessWidget {
+  final bool modern;
+  final MikzfixMacPerm perm;
+  final String permName;
+  const MikzfixMacSettingsIllustration(
+      {Key? key,
+      required this.modern,
+      required this.perm,
+      required this.permName})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final win = dark ? const Color(0xFF2B2B2E) : const Color(0xFFF5F5F7);
+    final side = dark ? const Color(0xFF232326) : const Color(0xFFE9E9EC);
+    final fg = dark ? const Color(0xFFE8E8EA) : const Color(0xFF1D1D1F);
+    final muted = dark ? const Color(0xFF9A9AA0) : const Color(0xFF6E6E73);
+    final line = dark ? const Color(0xFF3A3A3E) : const Color(0xFFD8D8DC);
+    const blue = Color(0xFF0A84FF);
+    final t = TextStyle(fontSize: 10, color: fg);
+    final tm = TextStyle(fontSize: 9, color: muted);
+
+    Widget dots() => Row(children: [
+          for (final c in const [
+            Color(0xFFFF5F57),
+            Color(0xFFFEBC2E),
+            Color(0xFF28C840)
+          ])
+            Container(
+              width: 7,
+              height: 7,
+              margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
             ),
+        ]);
+
+    Widget appRow() => Row(children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.asset('assets/icon.png', width: 16, height: 16),
+          ),
+          const SizedBox(width: 6),
+          Expanded(child: Text('MikzFix Remote', style: t)),
+          if (modern)
+            Container(
+              width: 24,
+              height: 14,
+              padding: const EdgeInsets.all(2),
+              alignment: Alignment.centerRight,
+              decoration: BoxDecoration(
+                  color: blue, borderRadius: BorderRadius.circular(7)),
+              child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                      color: Colors.white, shape: BoxShape.circle)),
+            )
+          else
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                  color: blue, borderRadius: BorderRadius.circular(3)),
+              child: const Icon(Icons.check, size: 10, color: Colors.white),
+            ),
+        ]);
+
+    final body = modern
+        // macOS 13+: sidebar with "Privacy & Security" selected, the permission page right.
+        ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 74,
+              color: side,
+              padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(translate('mikzfix_mac_general'), style: tm),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                    decoration: BoxDecoration(
+                        color: blue, borderRadius: BorderRadius.circular(4)),
+                    child: Text(translate('mikzfix_mac_privacy_security'),
+                        style: const TextStyle(
+                            fontSize: 9, color: Colors.white),
+                        maxLines: 2),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(permName,
+                        style: t.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: line),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: appRow(),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('+  –', style: tm),
+                  ],
+                ),
+              ),
+            ),
+          ])
+        // macOS 12 and older: "Security & Privacy" with the Privacy tab, list on the left.
+        : Padding(
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Icon(_selected.icon, size: 16, color: theme.colorScheme.primary),
+                Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: blue, borderRadius: BorderRadius.circular(4)),
+                    child: Text(translate('mikzfix_mac_privacy'),
+                        style:
+                            const TextStyle(fontSize: 9, color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    width: 70,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                        color: side, borderRadius: BorderRadius.circular(4)),
+                    child: Text(permName,
+                        style: t.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 2),
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(name,
-                        overflow: TextOverflow.ellipsis,
-                        style: small?.copyWith(fontWeight: FontWeight.w600)),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: line),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: appRow(),
+                    ),
                   ),
                 ]),
-                const Divider(height: 14),
+                const SizedBox(height: 4),
                 Row(children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: Image.asset('assets/icon.png', width: 22, height: 22),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('MikzFix Remote', style: small)),
-                  Container(
-                    width: 30,
-                    height: 18,
-                    padding: const EdgeInsets.all(2),
-                    alignment: Alignment.centerRight,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF22A06B),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: const BoxDecoration(
-                          color: Colors.white, shape: BoxShape.circle),
-                    ),
-                  ),
+                  Icon(Icons.lock_open, size: 11, color: muted),
+                  const SizedBox(width: 3),
+                  Text('+  –', style: tm),
                 ]),
               ],
             ),
+          );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: win,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: line))),
+            child: Row(children: [
+              dots(),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                    translate(modern
+                        ? 'mikzfix_mac_sys_settings'
+                        : 'mikzfix_mac_security_privacy'),
+                    style: tm,
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ]),
           ),
-          const SizedBox(height: 14),
-          step(1, Text(translate('mikzfix_perm_step1'), style: small)),
-          step(
-              2,
-              Text.rich(TextSpan(style: small, children: [
-                TextSpan(text: '${translate('mikzfix_perm_step2')} '),
-                TextSpan(
-                    text: name,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const TextSpan(text: '.'),
-              ]))),
-          step(3, Text(translate('mikzfix_perm_step3'), style: small)),
+          body,
         ],
       ),
     );

@@ -101,8 +101,11 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
               // mikzfix: follows login/logout at runtime.
               tail: Obx(() {
                 mikzfixLoggedIn.value;
+                // Without login the Settings show a minimal General (start at login, MikzFix
+                // access) once the app is installed.
                 return Offstage(
-                  offstage: bind.isIncomingOnly() || bind.isDisableSettings(),
+                  offstage: (bind.isIncomingOnly() || bind.isDisableSettings()) &&
+                      !bind.mainIsInstalled(),
                   child: ActionIcon(
                     message: 'Settings',
                     icon: IconFont.menu,

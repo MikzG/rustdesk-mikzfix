@@ -85,15 +85,44 @@ struct Enroller {
     last_rotate: Option<Instant>,
     /// The first revoke-pending attempt after start is not gated by the 24 h rule.
     revoke_tried: bool,
+    /// Windows "Start at login" value last applied to the Startup shortcut.
+    #[allow(dead_code)]
+    autostart_applied: Option<bool>,
 }
 
+/// mikzfix: "Start at login" (`""`/`"Y"` = on, the default; `"N"` = off). Set by the UI
+/// (Settings > General, also without login). On Windows the service keeps the all-users
+/// Startup shortcut of the tray in step with it; on macOS the UI writes a per-user LaunchAgent.
+pub const OPTION_START_AT_LOGIN: &str = "mikzfix-start-at-login";
+
 impl Enroller {
+    #[cfg(windows)]
+    fn sync_autostart(&mut self) {
+        let want = opt(OPTION_START_AT_LOGIN) != "N";
+        if self.autostart_applied == Some(want) {
+            return;
+        }
+        match crate::platform::windows::mikzfix_sync_tray_autostart(want) {
+            Ok(()) => {
+                log::info!("mikzfix start-at-login={}", want);
+                self.autostart_applied = Some(want);
+            }
+            Err(e) => {
+                // Not retried until the value changes or the service restarts.
+                log::warn!("mikzfix start-at-login={} failed: {}", want, e);
+                self.autostart_applied = Some(want);
+            }
+        }
+    }
+
     async fn run(mut self) {
         // Let the rendezvous mediator register the key first.
         sleep(Duration::from_secs(10)).await;
         let mut last_seen = unattended();
         let mut next = Instant::now();
         loop {
+            #[cfg(windows)]
+            self.sync_autostart();
             let cur = unattended();
             if cur != last_seen {
                 if last_seen == "Y" && cur != "Y" {
