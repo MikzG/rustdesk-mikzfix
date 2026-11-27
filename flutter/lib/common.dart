@@ -3746,28 +3746,64 @@ Color? disabledTextColor(BuildContext context, bool enabled) {
       : Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6);
 }
 
+/// mikzfix: "Made by MikzBots" credit (MB mark 16 px + text), always shown.
+/// Links to mikzbots.dev/pt for Portuguese, mikzbots.dev/ otherwise, in the system browser.
 Widget loadPowered(BuildContext context) {
-  if (bind.mainGetBuildinOption(key: "hide-powered-by-me") == 'Y') {
-    return SizedBox.shrink();
+  return const MikzBotsCredit().marginOnly(top: 6);
+}
+
+String mikzBotsCreditUrl(BuildContext context) {
+  var appLang = '';
+  try {
+    appLang = bind.mainGetLocalOption(key: kCommConfKeyLang).toLowerCase();
+  } catch (_) {}
+  final localeLang = Localizations.maybeLocaleOf(context)?.languageCode ?? '';
+  final isPt = appLang.startsWith('pt') ||
+      (appLang.isEmpty || appLang == 'default') && localeLang == 'pt';
+  return isPt ? 'https://mikzbots.dev/pt' : 'https://mikzbots.dev/';
+}
+
+class MikzBotsCredit extends StatefulWidget {
+  const MikzBotsCredit({Key? key}) : super(key: key);
+
+  @override
+  State<MikzBotsCredit> createState() => _MikzBotsCreditState();
+}
+
+class _MikzBotsCreditState extends State<MikzBotsCredit> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+        decoration: _hover && isDesktop
+            ? TextDecoration.underline
+            : TextDecoration.none);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          launchUrl(Uri.parse(mikzBotsCreditUrl(context)),
+              mode: LaunchMode.externalApplication);
+        },
+        child: Opacity(
+          opacity: 0.7,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/mikzbots-mb.webp',
+                  height: 16, filterQuality: FilterQuality.medium),
+              const SizedBox(width: 6),
+              Text('Made by MikzBots', style: style),
+            ],
+          ),
+        ),
+      ),
+    );
   }
-  return MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: GestureDetector(
-      onTap: () {
-        launchUrl(Uri.parse('https://rustdesk.com'));
-      },
-      child: Opacity(
-          opacity: 0.5,
-          child: Text(
-            translate("powered_by_me"),
-            overflow: TextOverflow.clip,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(fontSize: 9, decoration: TextDecoration.underline),
-          )),
-    ),
-  ).marginOnly(top: 6);
 }
 
 const _kDefaultLogoAsset = 'assets/logo.png';

@@ -417,11 +417,18 @@ def build_flutter_dmg(version, features):
     mac_arch = 'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x86_64'
     system2(
         f'FLUTTER_XCODE_ARCHS={mac_arch} FLUTTER_XCODE_ONLY_ACTIVE_ARCH=YES flutter build macos --release')
-    system2('cp -rf ../target/release/service ./build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS/')
+    # mikzfix: the bundle is "MikzFix Remote.app" (PRODUCT_NAME == APP_NAME, macos.rs looks
+    # for /Applications/{APP_NAME}.app).
+    app = './build/macos/Build/Products/Release/MikzFix Remote.app'
+    system2(f'cp -rf ../target/release/service "{app}/Contents/MacOS/"')
+    # mikzfix: copying `service` in breaks the ad hoc seal made by `flutter build`, and
+    # Gatekeeper then calls the app "damaged". Re-sign ad hoc AFTER the copy, then verify.
+    system2(f'codesign --force --deep --sign - "{app}"')
+    system2(f'codesign --verify --deep --strict --verbose=2 "{app}"')
     '''
     system2(
-        "create-dmg --volname \"RustDesk Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app rustdesk.dmg ./build/macos/Build/Products/Release/RustDesk.app")
-    os.rename("rustdesk.dmg", f"../rustdesk-{version}.dmg")
+        f"create-dmg --volname \"MikzFix Remote Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon \"MikzFix Remote.app\" 200 190 --hide-extension \"MikzFix Remote.app\" mikzfix-remote.dmg \"{app}\"")
+    os.rename("mikzfix-remote.dmg", f"../MikzFix_RemoteDesk-{version}.dmg")
     '''
     os.chdir("..")
 

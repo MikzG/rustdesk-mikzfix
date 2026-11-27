@@ -121,6 +121,9 @@ impl RendezvousMediator {
             }
         }
         crate::hbbs_http::sync::start();
+        // mikzfix: opt-in unattended access enrolment (installed desktop only).
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        crate::hbbs_http::mikzfix_enroll::start();
         #[cfg(target_os = "windows")]
         if crate::platform::is_installed() && crate::is_server() {
             crate::updater::start_auto_update();

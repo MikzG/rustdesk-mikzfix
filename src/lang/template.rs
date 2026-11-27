@@ -774,5 +774,16 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Your ip is blocked by the peer", ""),
         ("id_whitelist_caveat_tip", ""),
         ("whitelist_cidr_tip", ""),
+        ("mikzfix_access_title", ""),
+        ("mikzfix_access_text", ""),
+        ("mikzfix_access_allow", ""),
+        ("mikzfix_access_not_now", ""),
+        ("mikzfix_access_note", ""),
+        ("mikzfix_access_on", ""),
+        ("mikzfix_access_off", ""),
+        ("mikzfix_access_switch", ""),
+        ("mikzfix_access_off_confirm", ""),
+        ("mikzfix_access_off_button", ""),
+        ("mikzfix_about_title", ""),
     ].iter().cloned().collect();
 }

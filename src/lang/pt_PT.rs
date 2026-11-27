@@ -774,5 +774,16 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Your ip is blocked by the peer", "O seu IP está bloqueado pelo dispositivo remoto"),
         ("id_whitelist_caveat_tip", "O ID é comunicado pelo cliente que se liga. A whitelist reduz a exposição e não substitui a palavra-passe nem o 2FA"),
         ("whitelist_cidr_tip", "A notação CIDR é suportada, por exemplo 192.168.1.0/24"),
+        ("mikzfix_access_title", "Acesso da MikzFix a este computador"),
+        ("mikzfix_access_text", "Quer permitir que a MikzFix aceda a este computador para dar suporte sem lhe pedir o PIN de cada vez? Fica sempre a ver quando alguém está ligado e pode terminar a ligação. Pode desligar esta opção quando quiser."),
+        ("mikzfix_access_allow", "Permitir"),
+        ("mikzfix_access_not_now", "Agora não"),
+        ("mikzfix_access_note", "Se escolher «Agora não», a MikzFix continua a poder ajudar com o ID e o PIN mostrados no ecrã."),
+        ("mikzfix_access_on", "Ligado: a MikzFix pode aceder sem PIN."),
+        ("mikzfix_access_off", "Desligado: a MikzFix só acede com o seu PIN."),
+        ("mikzfix_access_switch", "Permitir acesso sem PIN"),
+        ("mikzfix_access_off_confirm", "Desligar o acesso sem PIN? A palavra-passe guardada neste computador é apagada."),
+        ("mikzfix_access_off_button", "Desligar"),
+        ("mikzfix_about_title", "Sobre o MikzFix Remote"),
     ].iter().cloned().collect();
 }

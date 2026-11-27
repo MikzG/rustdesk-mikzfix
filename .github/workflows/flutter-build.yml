@@ -14,6 +14,10 @@ on:
       all-platforms:
         type: boolean
         default: false
+      # mikzfix: test builds of the macOS Apple Silicon DMG only (Windows is built locally).
+      macos-arm-only:
+        type: boolean
+        default: false
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -62,6 +66,7 @@ jobs:
     uses: ./.github/workflows/bridge.yml
 
   build-RustDeskTempTopMostWindow:
+    if: ${{ !inputs.macos-arm-only }}
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     strategy:
       fail-fast: false
@@ -83,6 +88,7 @@ jobs:
       target_version: Windows10
 
   build-for-windows-flutter:
+    if: ${{ !inputs.macos-arm-only }}
     name: ${{ matrix.job.target }}
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
     runs-on: ${{ matrix.job.os }}
@@ -354,13 +360,13 @@ jobs:
         # is x64 / ARM64; the produced Package.msi is globbed since its bin/<platform>/ dir varies.
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
+          # mikzfix: preprocess.py reads dist_dir/<app-name>.exe, so the MSI gets its own copy
+          # of the dist dir with the exe named "MikzFix Remote.exe" (same name the portable
+          # "Install" button uses), then Product/Manufacturer/service/shortcuts are ours.
+          Copy-Item -Recurse -Force ./rustdesk ./rustdesk-msi
+          Rename-Item ./rustdesk-msi/rustdesk.exe "MikzFix Remote.exe"
           pushd ./res/msi
-          # NOTE: do NOT pass --app-name here. preprocess.py derives the dist exe path from it
-          # (init_global_vars: dist_dir/<app-name>.exe) to read the version, but build.py always
-          # produces `rustdesk.exe`. A mismatched --app-name makes version detection fail, so the
-          # $(var.Product) define is never written and the WiX build dies with 59x WIX0150.
-          # Branding the MSI's Product name would require renaming the built exe itself.
-          python preprocess.py --arp -d ../../rustdesk --manufacturer "MikzBots"
+          python preprocess.py --arp -d ../../rustdesk-msi --app-name "MikzFix Remote" --manufacturer "MikzFix"
           nuget restore msi.sln
           $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
           msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10
@@ -657,29 +663,15 @@ jobs:
 
 
   build-for-macOS:
-    if: ${{ inputs.all-platforms }}
+    if: ${{ inputs.all-platforms || inputs.macos-arm-only }}
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
     strategy:
       fail-fast: false
       matrix:
-        job:
-          - {
-              target: x86_64-apple-darwin,
-              os: macos-15-intel, #macos-latest or macos-14 use M1 now, https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#:~:text=14%20GB-,macos%2Dlatest%20or%20macos%2D14,-The%20macos%2Dlatestlabel
-              extra-build-args: "",
-              arch: x86_64,
-              vcpkg-triplet: x64-osx,
-            }
-          - {
-              target: aarch64-apple-darwin,
-              os: macos-14,
-              # extra-build-args: "--disable-flutter-texture-render", # disable this for mac, because we see a lot of users reporting flickering both on arm and x64, and we can not confirm if texture rendering has better performance if htere is no vram, https://github.com/rustdesk/rustdesk/issues/6296
-              extra-build-args: "--screencapturekit",
-              arch: aarch64,
-              vcpkg-triplet: arm64-osx,
-            }
+        # mikzfix: macos-arm-only keeps just the Apple Silicon entry.
+        job: ${{ fromJSON(inputs.macos-arm-only && '[{"target":"aarch64-apple-darwin","os":"macos-14","extra-build-args":"--screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]' || '[{"target":"x86_64-apple-darwin","os":"macos-15-intel","extra-build-args":"","arch":"x86_64","vcpkg-triplet":"x64-osx"},{"target":"aarch64-apple-darwin","os":"macos-14","extra-build-args":"--screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]') }}
     steps:
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
@@ -832,14 +824,21 @@ jobs:
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
+          APP="./flutter/build/macos/Build/Products/Release/MikzFix Remote.app"
+          # mikzfix: build.py already re-signed ad hoc after copying `service`; check the seal
+          # again right before packaging, so a "damaged" bundle never ships.
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$APP/Contents/Info.plist"
+          create-dmg --volname "MikzFix Remote" --icon "MikzFix Remote.app" 200 190 --hide-extension "MikzFix Remote.app" --window-size 800 400 --app-drop-link 600 185 MikzFix_RemoteDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg "$APP"
 
       - name: Upload unsigned macOS app
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rustdesk-unsigned-macos-${{ matrix.job.arch }}
-          path: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure, causing the codesign failed
+          path: MikzFix_RemoteDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure, causing the codesign failed
 
       - name: Codesign app and create signed dmg
         if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
@@ -862,7 +861,9 @@ jobs:
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
+          # mikzfix: the unsigned DMG is already named MikzFix_RemoteDesk-<ver>-<arch>.dmg.
           for name in rustdesk*??.dmg; do
+              [ -e "$name" ] || continue
               mv "$name" "${name%%.dmg}-${{ matrix.job.arch }}.dmg"
           done
 
@@ -873,7 +874,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            rustdesk*-${{ matrix.job.arch }}.dmg
+            MikzFix_RemoteDesk-*-${{ matrix.job.arch }}.dmg
 
   publish_unsigned:
     needs:

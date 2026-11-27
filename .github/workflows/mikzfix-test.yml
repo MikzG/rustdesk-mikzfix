@@ -1,0 +1,30 @@
+name: MikzFix Remote test build
+
+# mikzfix: manual test builds on a feature branch, published to a SEPARATE prerelease tag so
+# the `nightly` release (which the website syncs from) is never touched.
+on:
+  workflow_dispatch:
+    inputs:
+      upload-tag:
+        description: "Prerelease tag to publish to (never nightly)"
+        type: string
+        default: "mikzfix-remote-v2-test"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse the nightly tag
+        if: ${{ inputs.upload-tag == 'nightly' }}
+        run: |
+          echo "This workflow must not publish to nightly."
+          exit 1
+  run-test-build:
+    needs: [guard]
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: ${{ inputs.upload-tag }}
+      all-platforms: false
+      macos-arm-only: true

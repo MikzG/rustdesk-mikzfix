@@ -33,6 +33,8 @@ mod nb;
 mod nl;
 mod pl;
 mod ptbr;
+#[allow(non_snake_case)]
+mod pt_PT;
 mod ro;
 mod ru;
 mod sc;
@@ -180,7 +182,8 @@ pub fn translate_locale(name: String, locale: &str) -> String {
         "eo" => eo::T.deref(),
         "id" => id::T.deref(),
         "br" => ptbr::T.deref(),
-        "pt" => ptbr::T.deref(),
+        // mikzfix: Portugal first (pt-PT); Brazilian Portuguese stays on "br".
+        "pt" => pt_PT::T.deref(),
         "tr" => tr::T.deref(),
         "cs" => cs::T.deref(),
         "da" => da::T.deref(),

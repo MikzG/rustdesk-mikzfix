@@ -187,8 +187,8 @@ pub fn install_service() -> bool {
 // No need to merge the existing dup code, because the code in these two functions are too critical.
 // New code should be written in a common function.
 pub fn is_installed_daemon(prompt: bool) -> bool {
-    let daemon = format!("{}_service.plist", crate::get_full_name());
-    let agent = format!("{}_server.plist", crate::get_full_name());
+    let daemon = format!("{}_service.plist", launchd_name());
+    let agent = format!("{}_server.plist", launchd_name());
     let agent_plist_file = format!("/Library/LaunchAgents/{}", agent);
     if !prompt {
         // in macos 13, there is new way to check if they are running or enabled, https://developer.apple.com/documentation/servicemanagement/updating-helper-executables-from-earlier-versions-of-macos#Respond-to-changes-in-System-Settings
@@ -302,13 +302,37 @@ fn update_daemon_agent(agent_plist_file: String, update_source_dir: String, sync
     }
 }
 
+/// mikzfix: launchd label / plist base name. The app name has a space ("MikzFix Remote"),
+/// which the privilege scripts would split, so launchd uses it without spaces:
+/// `com.carriez.MikzFixRemote_service` / `_server`.
+pub fn launchd_name() -> String {
+    format!(
+        "{}.{}",
+        hbb_common::config::ORG.read().unwrap(),
+        crate::get_app_name().replace(' ', "")
+    )
+}
+
 fn correct_app_name(s: &str) -> String {
     let mut s = s.to_owned();
+    let app_name = crate::get_app_name();
+    // mikzfix: order matters. Labels and the prefs dir first (no spaces there), then the
+    // bundle id, then the generic names.
+    s = s.replace("com.carriez.RustDesk_", &format!("{}_", launchd_name()));
+    // Prefs dir as directories_next names it on macOS (spaces become '-').
+    s = s.replace(
+        "com.carriez.RustDesk/",
+        &format!(
+            "{}.{}/",
+            hbb_common::config::ORG.read().unwrap(),
+            app_name.replace(' ', "-")
+        ),
+    );
     if let Some(bundleid) = get_bundle_id() {
         s = s.replace("com.carriez.rustdesk", &bundleid);
     }
-    s = s.replace("rustdesk", &crate::get_app_name().to_lowercase());
-    s = s.replace("RustDesk", &crate::get_app_name());
+    s = s.replace("rustdesk", &app_name.to_lowercase().replace(' ', "-"));
+    s = s.replace("RustDesk", &app_name);
     s
 }
 
@@ -336,12 +360,12 @@ fn write_plist_atomically(path: &str, body: &str) -> ResultType<()> {
 
 pub fn write_plists() -> ResultType<()> {
     let daemon_plist_path = format!(
-        "/Library/LaunchDaemons/com.carriez.{}_service.plist",
-        crate::get_app_name()
+        "/Library/LaunchDaemons/{}_service.plist",
+        launchd_name()
     );
     let agent_plist_path = format!(
-        "/Library/LaunchAgents/com.carriez.{}_server.plist",
-        crate::get_app_name()
+        "/Library/LaunchAgents/{}_server.plist",
+        launchd_name()
     );
     let Some(daemon_plist) = PRIVILEGES_SCRIPTS_DIR.get_file("daemon.plist") else {
         bail!("daemon.plist not found in embedded resources");
@@ -384,7 +408,7 @@ pub fn uninstall_service(show_new_window: bool, sync: bool) -> bool {
                 log::error!("run osascript failed: {}", e);
             }
             _ => {
-                let agent = format!("{}_server.plist", crate::get_full_name());
+                let agent = format!("{}_server.plist", launchd_name());
                 let agent_plist_file = format!("/Library/LaunchAgents/{}", agent);
                 let uninstalled = !std::path::Path::new(&agent_plist_file).exists();
                 log::info!(
@@ -400,7 +424,7 @@ pub fn uninstall_service(show_new_window: bool, sync: bool) -> bool {
                     }
                     crate::ipc::set_option("stop-service", "Y");
                     std::process::Command::new("launchctl")
-                        .args(&["remove", &format!("{}_server", crate::get_full_name())])
+                        .args(&["remove", &format!("{}_server", launchd_name())])
                         .status()
                         .ok();
                     if show_new_window {
@@ -955,7 +979,7 @@ pub fn update_me() -> ResultType<()> {
 
     let app_name = crate::get_app_name();
     if is_installed_daemon && !is_service_stopped {
-        let agent = format!("{}_server.plist", crate::get_full_name());
+        let agent = format!("{}_server.plist", launchd_name());
         let agent_plist_file = format!("/Library/LaunchAgents/{}", agent);
         update_daemon_agent(agent_plist_file, app_dir, true);
     } else {
@@ -1103,8 +1127,8 @@ pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> Result
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp_dir, std::fs::Permissions::from_mode(0o700))?;
     }
-    let agent_plist = format!("/Library/LaunchAgents/com.carriez.{}_server.plist", app_name);
-    let daemon_plist = format!("/Library/LaunchDaemons/com.carriez.{}_service.plist", app_name);
+    let agent_plist = format!("/Library/LaunchAgents/{}_server.plist", launchd_name());
+    let daemon_plist = format!("/Library/LaunchDaemons/{}_service.plist", launchd_name());
 
     log::info!("[root-update] Starting silent root update from {}", dmg_path);
     // Check sessions before extracting to avoid unnecessary work
@@ -1235,8 +1259,8 @@ pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> Result
     // Write a shell script that runs detached after this function returns.
     // We cannot directly replace /Applications/RustDesk.app while it is running,
     // so we spawn a script that waits, kills processes, copies, and restarts.
-    let daemon_label = format!("com.carriez.{}_service", app_name);
-    let agent_label = format!("com.carriez.{}_server", app_name);
+    let daemon_label = format!("{}_service", launchd_name());
+    let agent_label = format!("{}_server", launchd_name());
     let script_path = format!("{}/rustdesk_update.sh", tmp_dir);
     let script = format!(
         r#"#!/bin/sh

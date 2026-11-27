@@ -215,6 +215,8 @@ class _ServerPageState extends State<ServerPage> {
                             : ServiceNotRunningNotification(),
                         const ConnectionManager(),
                         const PermissionChecker(),
+                        // mikzfix: credit at the bottom (settings are locked without login).
+                        loadPowered(context),
                         SizedBox.fromSize(size: const Size(0, 15.0)),
                       ],
                     ),

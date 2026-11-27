@@ -285,5 +285,16 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("id_whitelist_caveat_tip", "The ID is reported by the connecting client. This whitelist reduces exposure and does not replace the password or 2FA."),
         ("whitelist_cidr_tip", "CIDR notation is supported, e.g. 192.168.1.0/24"),
         ("Your ip is blocked by the peer", "Your IP is blocked by the peer"),
+        ("mikzfix_access_title", "MikzFix access to this computer"),
+        ("mikzfix_access_text", "Do you want to allow MikzFix to access this computer for support without asking you for the PIN each time? You will always see when someone is connected and can end the session. You can turn this off at any time."),
+        ("mikzfix_access_allow", "Allow"),
+        ("mikzfix_access_not_now", "Not now"),
+        ("mikzfix_access_note", "If you choose “Not now”, MikzFix can still help you using the ID and PIN shown on screen."),
+        ("mikzfix_access_on", "On: MikzFix can access without a PIN."),
+        ("mikzfix_access_off", "Off: MikzFix only accesses with your PIN."),
+        ("mikzfix_access_switch", "Allow access without PIN"),
+        ("mikzfix_access_off_confirm", "Turn off access without PIN? The password stored on this computer is deleted."),
+        ("mikzfix_access_off_button", "Turn off"),
+        ("mikzfix_about_title", "About MikzFix Remote"),
     ].iter().cloned().collect();
 }

@@ -32,7 +32,7 @@ LegalCopyright = "Copyright © 2026 MikzBots. Based on RustDesk (AGPL-3.0)."
 ProductName = "MikzFix Remote"
 OriginalFilename = "MikzFix_RemoteDesk_win.exe"
 FileDescription = "MikzFix Remote Desktop"
-CompanyName = "MikzBots"
+CompanyName = "MikzFix"
 #ProductVersion = ""
 
 [target.'cfg(target_os="windows")'.build-dependencies]

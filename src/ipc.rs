@@ -932,6 +932,21 @@ async fn handle(data: Data, stream: &mut Connection) {
                 if let Some(v) = value.get("privacy-mode-impl-key") {
                     crate::privacy_mode::switch(v);
                 }
+                // mikzfix: the enrolment state is owned by this (service) process. A UI that
+                // sends back a slightly stale options map must not erase or roll it back.
+                let mut value = value;
+                for k in [
+                    hbb_common::config::keys::OPTION_MIKZFIX_ENROLL_FP,
+                    hbb_common::config::keys::OPTION_MIKZFIX_ENROLL_LAST_FAIL,
+                    hbb_common::config::keys::OPTION_MIKZFIX_REVOKE_PENDING,
+                ] {
+                    let cur = Config::get_option(k);
+                    if cur.is_empty() {
+                        value.remove(k);
+                    } else {
+                        value.insert(k.to_owned(), cur);
+                    }
+                }
                 Config::set_options(value);
                 allow_err!(stream.send(&Data::Options(None)).await);
             }

@@ -6,6 +6,8 @@ use serde_json::{Map, Value};
 pub mod account;
 pub mod downloader;
 mod http_client;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod mikzfix_enroll;
 pub mod record_upload;
 pub mod sync;
 pub use http_client::{
