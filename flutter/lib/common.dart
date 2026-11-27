@@ -3934,8 +3934,12 @@ const Size kMikzfixMainDefaultSize = Size(900, 600);
 
 /// mikzfix: login/logout switches between incoming-only (compact, fixed size) and the full
 /// client without a restart. Called when the logged-in user changes.
+/// mikzfix: true while a big window of ours (the macOS permissions) needs the main window
+/// larger than the compact logged-out size; the compact resizing waits until it is false.
+bool mikzfixHoldWindowSize = false;
+
 Future<void> mikzfixApplyMainWindowMode() async {
-  if (!isDesktop) return;
+  if (!isDesktop || mikzfixHoldWindowSize) return;
   if (bind.isIncomingOnly()) {
     // Leave full screen / maximized first, or setSize is ignored and the window stays big.
     try {

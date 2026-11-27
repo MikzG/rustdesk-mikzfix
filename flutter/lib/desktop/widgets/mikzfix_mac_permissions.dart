@@ -5,11 +5,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:flutter_hbb/utils/multi_window_manager.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/desktop/widgets/mikzfix_access.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:flutter_hbb/main.dart';
 
 const kMikzfixBundleId = 'tech.mikzfix.remote';
 const _kPane = 'x-apple.systempreferences:com.apple.preference.security?';
@@ -94,11 +97,12 @@ extension _PermInfo on MikzfixMacPerm {
     await bind.mainSetLocalOption(key: _askedKey, value: 'Y');
     await Future.delayed(const Duration(seconds: 2));
     if (granted()) return;
-    var focused = true;
-    try {
-      focused = await windowManager.isFocused();
-    } catch (_) {}
-    if (focused) await launchUrl(Uri.parse(pane));
+    // The system alert belongs to another process: while it is up (or after the user went to
+    // Settings from it) our app is not the active one. This runs in the permissions window's
+    // own engine, so use the app lifecycle, not window_manager (main window only).
+    final active =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    if (active) await launchUrl(Uri.parse(pane));
   }
 }
 
@@ -109,30 +113,122 @@ bool mikzfixMacRequiredMissing() {
 
 bool _laterThisRun = false;
 
-/// Shows the window if a required permission is missing (macOS). Without login it cannot be
-/// closed while one is missing; "Lembrar mais tarde" hides it until the next start.
+/// Main window: true while it is blocked by the permissions window (logged out, a required
+/// permission missing). DesktopTabPage draws the blocking overlay from it.
+final RxBool mikzfixPermBlocked = false.obs;
+Timer? _permWatch;
+
+void _unblockMain() {
+  _permWatch?.cancel();
+  _permWatch = null;
+  mikzfixPermBlocked.value = false;
+}
+
+/// Opens the permissions as a SEPARATE window (macOS). Without login, and while a required
+/// permission is missing, the main window is blocked until they are granted or the user
+/// chooses "Remind me later" (closing the window counts as that; it comes back on the next
+/// start). With login it opens without blocking (Settings > Security).
 Future<void> mikzfixShowMacPermissions({bool fromSettings = false}) async {
   if (!isMacOS) return;
   if (!fromSettings && (_laterThisRun || !mikzfixMacRequiredMissing())) return;
-  await gFFI.dialogManager.show((setState, close, context) {
-    return CustomAlertDialog(
-      contentBoxConstraints: const BoxConstraints(maxWidth: 760),
-      content: _MikzfixMacPermissionsView(
-        onClose: () => close(),
-        onLater: () {
-          _laterThisRun = true;
-          close();
-        },
+  final blocking = !mikzfixLoggedIn.value && mikzfixMacRequiredMissing();
+  await rustDeskWinManager.openMikzfixPermissions(blocking: blocking);
+  if (!blocking) return;
+  mikzfixPermBlocked.value = true;
+  _permWatch?.cancel();
+  _permWatch = Timer.periodic(const Duration(seconds: 1), (_) async {
+    if (!mikzfixMacRequiredMissing()) {
+      _unblockMain();
+      await rustDeskWinManager.closeMikzfixPermissions();
+      return;
+    }
+    if (!await rustDeskWinManager.isMikzfixPermissionsOpen()) {
+      // Closed or "Remind me later": unblock until the next start.
+      _laterThisRun = true;
+      _unblockMain();
+    }
+  });
+}
+
+/// "Mostrar janela" on the blocking overlay.
+Future<void> mikzfixBringPermissionsToFront() async {
+  await rustDeskWinManager.openMikzfixPermissions(blocking: true);
+}
+
+/// Overlay that blocks the main window while the permissions window is required.
+class MikzfixPermBlockOverlay extends StatelessWidget {
+  const MikzfixPermBlockOverlay({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Positioned.fill(
+      child: Stack(children: [
+        const ModalBarrier(dismissible: false, color: Color(0x99000000)),
+        Center(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            constraints: const BoxConstraints(maxWidth: 320),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(Icons.lock_outline,
+                    color: theme.colorScheme.primary, size: 28),
+                const SizedBox(height: 10),
+                Text(translate('mikzfix_perm_block_msg'),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 14),
+                dialogButton(translate('mikzfix_perm_show_window'),
+                    onPressed: () => mikzfixBringPermissionsToFront()),
+              ],
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// The page of the separate permissions window.
+class MikzfixPermissionsWindowPage extends StatelessWidget {
+  final bool blocking;
+  const MikzfixPermissionsWindowPage({Key? key, required this.blocking})
+      : super(key: key);
+
+  Future<void> _closeSelf() async {
+    try {
+      await WindowController.fromWindowId(kWindowId!).close();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.background,
+      body: SafeArea(
+        child: _MikzfixMacPermissionsView(
+          blocking: blocking,
+          onClose: _closeSelf,
+          onLater: _closeSelf,
+        ),
       ),
     );
-  }, clickMaskDismiss: false, backDismiss: false, tag: 'mikzfix-mac-permissions');
+  }
 }
 
 class _MikzfixMacPermissionsView extends StatefulWidget {
   final VoidCallback onClose;
   final VoidCallback onLater;
+  final bool blocking;
   const _MikzfixMacPermissionsView(
-      {required this.onClose, required this.onLater});
+      {required this.onClose, required this.onLater, this.blocking = false});
 
   @override
   State<_MikzfixMacPermissionsView> createState() =>
@@ -145,6 +241,7 @@ class _MikzfixMacPermissionsViewState
   MikzfixMacPerm _selected = MikzfixMacPerm.screen;
   final Map<MikzfixMacPerm, bool> _state = {};
   bool _closing = false;
+  bool _showGuide = false;
 
   void _refresh() {
     var changed = false;
@@ -178,19 +275,22 @@ class _MikzfixMacPermissionsViewState
   }
 
   Future<void> _resetAll() async {
-    final ok = await gFFI.dialogManager.show<bool>((setState, close, context) {
-      return CustomAlertDialog(
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
         title: Text(translate('mikzfix_perm_reset')),
-        content: Text(translate('mikzfix_perm_reset_confirm')),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text(translate('mikzfix_perm_reset_confirm')),
+        ),
         actions: [
           dialogButton(translate('Cancel'),
-              isOutline: true, onPressed: () => close(false)),
+              isOutline: true, onPressed: () => Navigator.of(ctx).pop(false)),
           dialogButton(translate('mikzfix_perm_reset_button'),
-              onPressed: () => close(true)),
+              onPressed: () => Navigator.of(ctx).pop(true)),
         ],
-        onCancel: () => close(false),
-      );
-    }, tag: 'mikzfix-perm-reset');
+      ),
+    );
     if (ok != true) return;
     // Only our own bundle id: resets the TCC entries of this app, nothing else.
     try {
@@ -206,53 +306,103 @@ class _MikzfixMacPermissionsViewState
     final theme = Theme.of(context);
     final loggedIn = mikzfixLoggedIn.value;
     final canClose = loggedIn || _requiredOk;
-    if (_requiredOk && !loggedIn && !_closing) {
+    if (_requiredOk && widget.blocking && !_closing) {
       _closing = true;
       // All required permissions in: move on (service install card, then the consent).
       WidgetsBinding.instance.addPostFrameCallback((_) => widget.onClose());
     }
-    return SizedBox(
-      width: 720,
-      child: Row(
+    // Responsive: two columns when there is room, one column (permissions first, the
+    // instructions collapsible below) when narrow. The body scrolls; the footer with the
+    // action buttons is fixed and always visible. Bounded size on both axes, so the dialog
+    // can never collapse into an empty card.
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth.isFinite ? c.maxWidth : 880.0;
+      final h = c.maxHeight.isFinite ? c.maxHeight : 620.0;
+      final narrow = w < 640;
+      final header = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 250, child: _guide(context)),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
+          Text(translate('mikzfix_perm_title'),
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(translate('mikzfix_perm_sub'), style: theme.textTheme.bodySmall),
+          const SizedBox(height: 14),
+        ],
+      );
+      final list = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (final p in MikzfixMacPerm.values) _row(context, p)],
+      );
+      final Widget body = narrow
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(translate('mikzfix_perm_title'),
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Text(translate('mikzfix_perm_sub'),
-                    style: theme.textTheme.bodySmall),
-                const SizedBox(height: 14),
-                for (final p in MikzfixMacPerm.values) _row(context, p),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    TextButton.icon(
-                      onPressed: _resetAll,
-                      icon: const Icon(Icons.restart_alt, size: 18),
-                      label: Text(translate('mikzfix_perm_reset')),
-                    ),
-                    const Spacer(),
-                    if (canClose)
-                      dialogButton(translate('Close'), onPressed: widget.onClose)
-                    else
-                      dialogButton(translate('mikzfix_perm_later'),
-                          isOutline: true, onPressed: widget.onLater),
-                  ],
+                header,
+                list,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _showGuide = !_showGuide),
+                    icon: Icon(
+                        _showGuide ? Icons.expand_less : Icons.expand_more,
+                        size: 18),
+                    label: Text(translate(
+                        _showGuide ? 'mikzfix_see_less' : 'mikzfix_see_more')),
+                  ),
+                ),
+                if (_showGuide) _guide(context),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 250, child: _guide(context)),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [header, list],
+                  ),
                 ),
               ],
+            );
+      final closeBtn = canClose
+          ? dialogButton(translate('Close'), onPressed: widget.onClose)
+          : dialogButton(translate('mikzfix_perm_later'),
+              isOutline: true, onPressed: widget.onLater);
+      final resetBtn = TextButton.icon(
+        onPressed: _resetAll,
+        icon: const Icon(Icons.restart_alt, size: 18),
+        label: Text(translate('mikzfix_perm_reset')),
+      );
+      final footer = narrow
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [closeBtn, const SizedBox(height: 6), resetBtn],
+            )
+          : Row(children: [resetBtn, const Spacer(), closeBtn]);
+      return SizedBox(
+        width: w,
+        height: h,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(narrow ? 14 : 20),
+                child: body,
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+            const Divider(height: 1),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: narrow ? 14 : 20, vertical: 12),
+              child: footer,
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _row(BuildContext context, MikzfixMacPerm p) {

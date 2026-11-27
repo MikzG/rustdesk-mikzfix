@@ -18,6 +18,8 @@ enum WindowType {
   ViewCamera,
   PortForward,
   Terminal,
+  // mikzfix: the macOS permissions window.
+  MikzfixPermissions,
   Unknown
 }
 
@@ -36,6 +38,8 @@ extension Index on int {
         return WindowType.PortForward;
       case 5:
         return WindowType.Terminal;
+      case 6:
+        return WindowType.MikzfixPermissions;
       default:
         return WindowType.Unknown;
     }
@@ -65,6 +69,7 @@ class RustDeskMultiWindowManager {
   final List<int> _viewCameraWindows = List.empty(growable: true);
   final List<int> _portForwardWindows = List.empty(growable: true);
   final List<int> _terminalWindows = List.empty(growable: true);
+  final List<int> _mikzfixPermWindows = List.empty(growable: true);
 
   moveTabToNewWindow(int windowId, String peerId, String sessionId,
       WindowType windowType) async {
@@ -415,6 +420,8 @@ class RustDeskMultiWindowManager {
         return _portForwardWindows;
       case WindowType.Terminal:
         return _terminalWindows;
+      case WindowType.MikzfixPermissions:
+        return _mikzfixPermWindows;
       case WindowType.Unknown:
         break;
     }
@@ -439,9 +446,63 @@ class RustDeskMultiWindowManager {
         break;
       case WindowType.Terminal:
         _terminalWindows.clear();
+      case WindowType.MikzfixPermissions:
+        _mikzfixPermWindows.clear();
       case WindowType.Unknown:
         break;
     }
+  }
+
+  /// mikzfix: open (or bring to front) the macOS permissions window, a separate window of
+  /// its own size, centred, always in front of the main one while it is open.
+  Future<int?> openMikzfixPermissions({required bool blocking}) async {
+    final existing = await _aliveMikzfixPermWindow();
+    if (existing != null) {
+      final c = WindowController.fromWindowId(existing);
+      await c.show();
+      await c.focus();
+      return existing;
+    }
+    final msg = jsonEncode({
+      'type': WindowType.MikzfixPermissions.index,
+      'blocking': blocking,
+    });
+    final c = await DesktopMultiWindow.createWindow(msg);
+    c
+      ..setFrame(const Offset(0, 0) & const Size(880, 620))
+      ..center()
+      ..setTitle(translate('mikzfix_perm_title'));
+    if (isMacOS) {
+      Future.microtask(() => c.show());
+    }
+    _mikzfixPermWindows
+      ..clear()
+      ..add(c.windowId);
+    return c.windowId;
+  }
+
+  Future<int?> _aliveMikzfixPermWindow() async {
+    if (_mikzfixPermWindows.isEmpty) return null;
+    try {
+      final ids = await DesktopMultiWindow.getAllSubWindowIds();
+      final id = _mikzfixPermWindows.first;
+      if (ids.contains(id)) return id;
+    } catch (_) {}
+    _mikzfixPermWindows.clear();
+    return null;
+  }
+
+  Future<bool> isMikzfixPermissionsOpen() async =>
+      (await _aliveMikzfixPermWindow()) != null;
+
+  Future<void> closeMikzfixPermissions() async {
+    final id = await _aliveMikzfixPermWindow();
+    if (id == null) return;
+    try {
+      await WindowController.fromWindowId(id).setPreventClose(false);
+      await WindowController.fromWindowId(id).close();
+    } catch (_) {}
+    _mikzfixPermWindows.clear();
   }
 
   void setMethodHandler(

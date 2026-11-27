@@ -29,6 +29,7 @@ import 'mobile/pages/home_page.dart';
 import 'mobile/pages/server_page.dart';
 import 'mobile/widgets/deploy_dialog.dart';
 import 'models/platform_model.dart';
+import 'desktop/widgets/mikzfix_mac_permissions.dart';
 
 import 'package:flutter_hbb/plugin/handlers.dart'
     if (dart.library.html) 'package:flutter_hbb/web/plugin/handlers.dart';
@@ -99,6 +100,9 @@ Future<void> main(List<String> args) async {
           argument,
           kAppTypeDesktopTerminal,
         );
+      case WindowType.MikzfixPermissions:
+        runMikzfixPermissionsWindow(argument);
+        break;
       default:
         break;
     }
@@ -284,6 +288,21 @@ void runMultiWindow(
       exit(0);
   }
   // show window from hidden status
+  WindowController.fromWindowId(kWindowId!).show();
+}
+
+/// mikzfix: the macOS permissions as a window of its own (desktop_multi_window).
+void runMikzfixPermissionsWindow(Map<String, dynamic> argument) async {
+  await initEnv(kAppTypeMikzfixPermissions);
+  mikzfixRefreshLoginState();
+  // Closing it with the window button is "Remind me later": the main window sees the window
+  // gone and unblocks until the next start.
+  WindowController.fromWindowId(kWindowId!).setPreventClose(false);
+  _runApp(
+    translate('mikzfix_perm_title'),
+    MikzfixPermissionsWindowPage(blocking: argument['blocking'] == true),
+    MyTheme.currentThemeMode(),
+  );
   WindowController.fromWindowId(kWindowId!).show();
 }
 

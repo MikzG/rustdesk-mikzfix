@@ -52,6 +52,8 @@ const String kAppTypeDesktopFileTransfer = "file transfer";
 const String kAppTypeDesktopViewCamera = "view camera";
 const String kAppTypeDesktopPortForward = "port forward";
 const String kAppTypeDesktopTerminal = "terminal";
+// mikzfix: the macOS permissions window (a separate window).
+const String kAppTypeMikzfixPermissions = "mikzfix_permissions";
 
 const String kWindowMainWindowOnTop = "main_window_on_top";
 const String kWindowRefreshCurrentUser = "refresh_current_user";

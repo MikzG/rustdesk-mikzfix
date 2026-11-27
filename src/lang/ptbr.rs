@@ -842,5 +842,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_start_login", "Iniciar com o computador"),
         ("mikzfix_start_login_tip", "Abre o MikzFix Remote na barra (junto ao relógio) quando inicias sessão no computador."),
         ("mikzfix_general_locked_tip", "As outras definições ficam disponíveis depois de iniciares sessão."),
+        ("mikzfix_perm_block_msg", "Conceda as permissões na janela de permissões."),
+        ("mikzfix_perm_show_window", "Mostrar janela"),
     ].iter().cloned().collect();
 }

@@ -842,5 +842,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_start_login", ""),
         ("mikzfix_start_login_tip", ""),
         ("mikzfix_general_locked_tip", ""),
+        ("mikzfix_perm_block_msg", ""),
+        ("mikzfix_perm_show_window", ""),
     ].iter().cloned().collect();
 }

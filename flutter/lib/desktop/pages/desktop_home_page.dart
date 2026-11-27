@@ -926,6 +926,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   _updateWindowSize() {
+    // mikzfix: not while the permissions window needs the larger size.
+    if (mikzfixHoldWindowSize) return;
     RenderObject? renderObject = _childKey.currentContext?.findRenderObject();
     if (renderObject == null) {
       return;
