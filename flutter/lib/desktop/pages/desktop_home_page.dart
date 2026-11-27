@@ -93,7 +93,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
       // mikzfix: unattended access switch (Settings are locked without login).
-      if (!isOutgoingOnly && bind.mainIsInstalled()) const MikzfixAccessCard(),
+      if (!isOutgoingOnly && mikzfixServiceReady()) const MikzfixAccessCard(),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -486,30 +486,40 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         });
       }
     } else if (isMacOS) {
+      // mikzfix: our own short cards, always visible (exempt from hide-help-cards). Before,
+      // the hidden permission cards stopped the chain and the daemon "Install" never showed,
+      // so the service (and the unattended-access enrolment) was never installed.
       final isOutgoingOnly = bind.isOutgoingOnly();
-      if (!(isOutgoingOnly || bind.mainIsCanScreenRecording(prompt: false))) {
-        return buildInstallCard("Permissions", "config_screen", "Configure",
-            () async {
+      if (!isOutgoingOnly && !bind.mainIsInstalled()) {
+        return buildInstallCard("mikzfix_mac_daemon_title",
+            "mikzfix_mac_move_tip", "", () {});
+      } else if (!(isOutgoingOnly ||
+          bind.mainIsCanScreenRecording(prompt: false))) {
+        return buildInstallCard("Permissions", "mikzfix_mac_screen_tip",
+            "Configure", () async {
           bind.mainIsCanScreenRecording(prompt: true);
           watchIsCanScreenRecording = true;
-        }, help: 'Help', link: translate("doc_mac_permission"));
+        });
       } else if (!isOutgoingOnly && !bind.mainIsProcessTrusted(prompt: false)) {
-        return buildInstallCard("Permissions", "config_acc", "Configure",
-            () async {
+        return buildInstallCard("Permissions", "mikzfix_mac_acc_tip",
+            "Configure", () async {
           bind.mainIsProcessTrusted(prompt: true);
           watchIsProcessTrust = true;
-        }, help: 'Help', link: translate("doc_mac_permission"));
+        });
       } else if (!bind.mainIsCanInputMonitoring(prompt: false)) {
-        return buildInstallCard("Permissions", "config_input", "Configure",
-            () async {
+        return buildInstallCard("Permissions", "mikzfix_mac_input_tip",
+            "Configure", () async {
           bind.mainIsCanInputMonitoring(prompt: true);
           watchIsInputMonitoring = true;
-        }, help: 'Help', link: translate("doc_mac_permission"));
+        });
       } else if (!isOutgoingOnly &&
           !svcStopped.value &&
           bind.mainIsInstalled() &&
           !bind.mainIsInstalledDaemon(prompt: false)) {
-        return buildInstallCard("", "install_daemon_tip", "Install", () async {
+        return buildInstallCard("mikzfix_mac_daemon_title",
+            "mikzfix_mac_daemon_tip", "mikzfix_install_button", () async {
+          // Asks for the administrator password (osascript), then writes the
+          // LaunchDaemon/LaunchAgent and loads them.
           bind.mainIsInstalledDaemon(prompt: true);
         });
       }
@@ -591,7 +601,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       String? closeOption}) {
     if (bind.mainGetBuildinOption(key: kOptionHideHelpCards) == 'Y' &&
         content != 'install_daemon_tip' &&
-        content != 'mikzfix_install_tip') {
+        !content.startsWith('mikzfix_')) {
       return const SizedBox();
     }
     void closeCard() async {
@@ -710,6 +720,15 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.initState();
     // mikzfix: first-run consent for MikzFix access (installed app, no login).
     mikzfixMaybeAskConsent();
+    // mikzfix: the "Made by MikzBots" mark is a webp decoded asynchronously, and the compact
+    // window is sized from the pane's height; decode it up front and re-measure once it is in,
+    // so the credit shows with the rest of the pane instead of a moment later.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await precacheImage(const AssetImage('assets/mikzbots-mb.webp'), context);
+      if (mounted && bind.isIncomingOnly() && isInHomePage()) {
+        _updateWindowSize();
+      }
+    });
     _mikzfixWasIncomingOnly = bind.isIncomingOnly();
     _mikzfixLoginSub = gFFI.userModel.userName.listen((_) {
       // On login the user name is set a moment before access_token is stored (and

@@ -306,5 +306,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_terms", "Terms"),
         ("mikzfix_source", "Source code"),
         ("mikzfix_about_license", "MikzFix Remote, by MikzFix. Based on RustDesk © Purslane Tech Pte. Ltd. Licensed under the GNU AGPL-3.0, without any warranty."),
+        ("mikzfix_mac_daemon_title", "Install the MikzFix Remote service"),
+        ("mikzfix_mac_daemon_tip", "Install the service so MikzFix can help you without having to ask you for the PIN. Your Mac will ask for the administrator password."),
+        ("mikzfix_mac_move_tip", "Drag MikzFix Remote to the Applications folder and open it from there so it can be installed."),
+        ("mikzfix_mac_screen_tip", "Allow Screen Recording so MikzFix can see your screen."),
+        ("mikzfix_mac_acc_tip", "Allow Accessibility so MikzFix can use the mouse and keyboard."),
+        ("mikzfix_mac_input_tip", "Allow Input Monitoring so the keyboard works."),
     ].iter().cloned().collect();
 }

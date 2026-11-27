@@ -3812,10 +3812,10 @@ class _MikzBotsCreditState extends State<MikzBotsCredit> {
                     colorFilter: ColorFilter.mode(
                         Colors.white.withOpacity(0.85), BlendMode.srcATop),
                     child: Image.asset('assets/mikzbots-mb.webp',
-                        height: 16, filterQuality: FilterQuality.medium),
+                        width: 21, height: 16, filterQuality: FilterQuality.medium),
                   )
                 : Image.asset('assets/mikzbots-mb.webp',
-                    height: 16, filterQuality: FilterQuality.medium),
+                    width: 21, height: 16, filterQuality: FilterQuality.medium),
             const SizedBox(width: 6),
             Opacity(
                 opacity: 0.8,

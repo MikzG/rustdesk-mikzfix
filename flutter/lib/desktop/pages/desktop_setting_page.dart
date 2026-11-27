@@ -903,7 +903,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 password(context),
                 _Card(title: '2FA', children: [tfa()]),
                 // mikzfix: MikzFix access (unattended) switch.
-                if (bind.mainIsInstalled())
+                if (mikzfixServiceReady())
                   _Card(
                       title: translate('mikzfix_access_title'),
                       children: [

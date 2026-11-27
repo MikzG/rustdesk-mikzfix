@@ -21,11 +21,26 @@ bool mikzfixIsLoggedIn() {
 
 /// Shows the first-run consent once, on an installed desktop app, when nobody is logged in.
 /// A logged-in machine (Miguel's) is never asked and stays "N".
+/// "Installed" for unattended access: the app is installed AND, on macOS, the LaunchDaemon /
+/// LaunchAgent pair is installed (being in /Applications is not enough: without the daemon
+/// the GUI itself is the server and the enrolment loop never runs).
+bool mikzfixServiceReady() {
+  if (!bind.mainIsInstalled()) return false;
+  if (isMacOS && !bind.mainIsInstalledDaemon(prompt: false)) return false;
+  return true;
+}
+
 Future<void> mikzfixMaybeAskConsent() async {
   if (!isDesktop) return;
   // Give the IPC option cache a moment to load the service config.
   await Future.delayed(const Duration(seconds: 3));
-  if (!bind.mainIsInstalled()) return;
+  // On macOS the service can be installed from the home card while the app is open, so keep
+  // checking (local calls only) until it is ready or the question was already answered.
+  while (!mikzfixServiceReady()) {
+    if (!bind.mainIsInstalled()) return;
+    if (bind.mainGetOptionSync(key: kOptionMikzfixUnattended).isNotEmpty) return;
+    await Future.delayed(const Duration(seconds: 5));
+  }
   if (bind.mainGetOptionSync(key: kOptionMikzfixUnattended).isNotEmpty) return;
   if (mikzfixIsLoggedIn()) {
     await bind.mainSetOption(key: kOptionMikzfixUnattended, value: 'N');
