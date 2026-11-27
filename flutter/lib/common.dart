@@ -3937,6 +3937,17 @@ const Size kMikzfixMainDefaultSize = Size(900, 600);
 Future<void> mikzfixApplyMainWindowMode() async {
   if (!isDesktop) return;
   if (bind.isIncomingOnly()) {
+    // Leave full screen / maximized first, or setSize is ignored and the window stays big.
+    try {
+      if (await windowManager.isFullScreen()) {
+        await windowManager.setFullScreen(false);
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      if (await windowManager.isMaximized()) {
+        await windowManager.unmaximize();
+        await Future.delayed(const Duration(milliseconds: 150));
+      }
+    } catch (_) {}
     // Same sizes the tab page uses in incoming-only: compact Home, larger Settings.
     if (isInHomePage()) {
       await windowManager.setSize(getIncomingOnlyHomeSize());
@@ -3946,6 +3957,7 @@ Future<void> mikzfixApplyMainWindowMode() async {
       setResizable(true);
     }
   } else {
+    // Login from the compact window: only widen it (never maximize).
     setResizable(true);
     final s = await windowManager.getSize();
     if (s.width < kMikzfixMainMinWidth) {
