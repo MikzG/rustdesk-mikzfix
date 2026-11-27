@@ -338,6 +338,8 @@ def build_flutter_deb(version, features):
         'cp ../res/rustdesk.service tmpdeb/usr/share/rustdesk/files/systemd/')
     system2(
         'cp ../res/128x128@2x.png tmpdeb/usr/share/icons/hicolor/256x256/apps/rustdesk.png')
+    system2('mkdir -p tmpdeb/usr/share/icons/hicolor/512x512/apps/')
+    system2('cp ../res/512x512.png tmpdeb/usr/share/icons/hicolor/512x512/apps/rustdesk.png')
     system2(
         'cp ../res/scalable.svg tmpdeb/usr/share/icons/hicolor/scalable/apps/rustdesk.svg')
     system2(
@@ -381,6 +383,8 @@ def build_deb_from_folder(version, binary_folder):
         'cp ../res/rustdesk.service tmpdeb/usr/share/rustdesk/files/systemd/')
     system2(
         'cp ../res/128x128@2x.png tmpdeb/usr/share/icons/hicolor/256x256/apps/rustdesk.png')
+    system2('mkdir -p tmpdeb/usr/share/icons/hicolor/512x512/apps/')
+    system2('cp ../res/512x512.png tmpdeb/usr/share/icons/hicolor/512x512/apps/rustdesk.png')
     system2(
         'cp ../res/scalable.svg tmpdeb/usr/share/icons/hicolor/scalable/apps/rustdesk.svg')
     system2(
@@ -428,7 +432,7 @@ def build_flutter_dmg(version, features):
     '''
     system2(
         f"create-dmg --volname \"MikzFix Remote Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon \"MikzFix Remote.app\" 200 190 --hide-extension \"MikzFix Remote.app\" mikzfix-remote.dmg \"{app}\"")
-    os.rename("mikzfix-remote.dmg", f"../MikzFix_RemoteDesk-{version}.dmg")
+    os.rename("mikzfix-remote.dmg", "../MikzFix_RemoteDesk_mac.dmg")
     '''
     os.chdir("..")
 
@@ -623,6 +627,8 @@ def main():
                     'cp res/rustdesk.service tmpdeb/usr/share/rustdesk/files/systemd/')
                 system2(
                     'cp res/128x128@2x.png tmpdeb/usr/share/icons/hicolor/256x256/apps/rustdesk.png')
+                system2('mkdir -p tmpdeb/usr/share/icons/hicolor/512x512/apps/')
+                system2('cp res/512x512.png tmpdeb/usr/share/icons/hicolor/512x512/apps/rustdesk.png')
                 system2(
                     'cp res/scalable.svg tmpdeb/usr/share/icons/hicolor/scalable/apps/rustdesk.svg')
                 system2(
