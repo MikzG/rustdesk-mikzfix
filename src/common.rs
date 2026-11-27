@@ -1009,6 +1009,19 @@ pub fn is_rustdesk() -> bool {
     hbb_common::config::APP_NAME.read().unwrap().eq("RustDesk")
 }
 
+/// mikzfix: name for system identifiers that cannot hold a space or must match what the
+/// packages install. Linux keeps the `rustdesk` package, binary, systemd unit,
+/// /etc/rustdesk and rustdesk.desktop, so it is `rustdesk` there; elsewhere it is the app
+/// name without spaces (`MikzFixRemote`). The visible name stays get_app_name().
+pub fn get_sys_name() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        return "rustdesk".to_owned();
+    }
+    #[allow(unreachable_code)]
+    get_app_name().replace(' ', "")
+}
+
 #[inline]
 pub fn get_uri_prefix() -> String {
     format!("{}://", get_app_name().to_lowercase())

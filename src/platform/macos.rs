@@ -1106,9 +1106,11 @@ fn validate_update_tree(path: &Path, framework_root: Option<&Path>) -> ResultTyp
 pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> ResultType<()> {
     let app_name = crate::get_app_name();
     if app_name.is_empty()
+        // mikzfix: the app name has a space ("MikzFix Remote"); allow it, every use in the
+        // update script below is quoted.
         || !app_name
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b' '))
     {
         bail!("[root-update] unsafe application name");
     }
@@ -1319,7 +1321,7 @@ bootout_agents() {{
 }}
 find_agent_pid() {{
     agent_uid="$1"
-    for candidate_pid in $(pgrep -u "$agent_uid" -x {app_name} 2>/dev/null || true); do
+    for candidate_pid in $(pgrep -u "$agent_uid" -x "{app_name}" 2>/dev/null || true); do
         process_args=$(ps -p "$candidate_pid" -o args= 2>/dev/null || true)
         if printf '%s\n' "$process_args" | grep -F "/Applications/{app_name}.app/Contents/MacOS/{app_name}" >/dev/null && \
            printf '%s\n' "$process_args" | grep -E '(^|[[:space:]])--server([[:space:]]|$)' >/dev/null; then
@@ -1363,7 +1365,7 @@ agent_process_matches() {{
 capture_stopping_agent_pids() {{
     stopping_agent_pids=""
     for agent_uid in {uid_list}; do
-        for candidate_pid in $(pgrep -u "$agent_uid" -x {app_name} 2>/dev/null || true); do
+        for candidate_pid in $(pgrep -u "$agent_uid" -x "{app_name}" 2>/dev/null || true); do
             if agent_process_matches "$agent_uid" "$candidate_pid"; then
                 stopping_agent_pids="$stopping_agent_pids $candidate_pid"
             fi
@@ -1372,7 +1374,7 @@ capture_stopping_agent_pids() {{
 }}
 terminate_agent_processes() {{
     for agent_uid in {uid_list}; do
-        for candidate_pid in $(pgrep -u "$agent_uid" -x {app_name} 2>/dev/null || true); do
+        for candidate_pid in $(pgrep -u "$agent_uid" -x "{app_name}" 2>/dev/null || true); do
             if agent_process_matches "$agent_uid" "$candidate_pid"; then
                 kill -KILL "$candidate_pid" 2>/dev/null || true
             fi
@@ -1381,7 +1383,7 @@ terminate_agent_processes() {{
 }}
 terminate_user_bundle_processes() {{
     for agent_uid in {uid_list}; do
-        for candidate_pid in $(pgrep -u "$agent_uid" -x {app_name} 2>/dev/null || true); do
+        for candidate_pid in $(pgrep -u "$agent_uid" -x "{app_name}" 2>/dev/null || true); do
             process_args=$(ps -p "$candidate_pid" -o args= 2>/dev/null || true)
             if printf '%s\n' "$process_args" | grep -F "/Applications/{app_name}.app/" >/dev/null; then
                 kill -KILL "$candidate_pid" 2>/dev/null || true
@@ -1391,7 +1393,7 @@ terminate_user_bundle_processes() {{
 }}
 user_bundle_processes_absent() {{
     for agent_uid in {uid_list}; do
-        for candidate_pid in $(pgrep -u "$agent_uid" -x {app_name} 2>/dev/null || true); do
+        for candidate_pid in $(pgrep -u "$agent_uid" -x "{app_name}" 2>/dev/null || true); do
             process_args=$(ps -p "$candidate_pid" -o args= 2>/dev/null || true)
             if printf '%s\n' "$process_args" | grep -F "/Applications/{app_name}.app/" >/dev/null; then
                 return 1
@@ -1540,7 +1542,7 @@ stop_daemon() {{
     return 1
 }}
 write_new_plists() {{
-    /Applications/{app_name}.app/Contents/MacOS/service --write-plists \
+    "/Applications/{app_name}.app/Contents/MacOS/service" --write-plists \
         >"{tmp_dir}/write-plists.log" 2>&1 &
     write_pid=$!
     for _ in $(/usr/bin/seq 1 60); do
@@ -1613,7 +1615,7 @@ rollback_transaction() {{
 trap rollback_transaction EXIT
 gui_uids=""
 for agent_uid in {uid_list}; do
-    for pid in $(pgrep -u "$agent_uid" -x {app_name} || true); do
+    for pid in $(pgrep -u "$agent_uid" -x "{app_name}" || true); do
         process_args=$(ps -p "$pid" -o args= 2>/dev/null || true)
         if printf '%s\n' "$process_args" | grep -F "/Applications/{app_name}.app/" >/dev/null && \
            ! printf '%s\n' "$process_args" | grep -E "(^|[[:space:]])(--server|--service|--update)([[:space:]]|$)" >/dev/null; then
@@ -1646,7 +1648,7 @@ if [ -e "$staged_bundle" ] || [ -L "$staged_bundle" ]; then
     echo "[root-update] staged bundle path already exists, aborting" >> {tmp_dir}/rustdesk_root_update.log
     exit 1
 fi
-if ! ditto {src_app} "$staged_bundle" 2>/dev/null; then
+if ! ditto "{src_app}" "$staged_bundle" 2>/dev/null; then
     echo "[root-update] ditto failed, aborting update" >> {tmp_dir}/rustdesk_root_update.log
     rm -rf "$staged_bundle"
     exit 1
@@ -1660,35 +1662,35 @@ if [ ! -d "$staged_bundle/Contents/MacOS" ] || \
     rm -rf "$staged_bundle"
     exit 1
 fi
-if ! mv {app_bundle} {app_bundle}.bak; then
+if ! mv "{app_bundle}" "{app_bundle}.bak"; then
     echo "[root-update] backup mv failed, aborting" >> {tmp_dir}/rustdesk_root_update.log
     rm -rf "$staged_bundle"
     exit 1
 fi
 bundle_swapped=1
-if ! mv "$staged_bundle" {app_bundle}; then
+if ! mv "$staged_bundle" "{app_bundle}"; then
     echo "[root-update] replacement mv failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
     exit 1
 fi
 # Install the entire bundle as root-owned.  The LaunchDaemon executes code
 # from this bundle, so no nested framework, helper, or resource may remain
 # user-writable.
-if ! chown -R root:wheel {app_bundle} || ! chmod -R go-w {app_bundle}; then
+if ! chown -R root:wheel "{app_bundle}" || ! chmod -R go-w "{app_bundle}"; then
     echo "[root-update] chown failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
     exit 1
 fi
-xattr -r -d com.apple.quarantine {app_bundle} || true
+xattr -r -d com.apple.quarantine "{app_bundle}" || true
 # Keep root-executed files AND entire ancestor chain root-owned — prevent privilege escalation
-if ! chown root:wheel {app_bundle} || \
-   ! chmod 755 {app_bundle} || \
-   ! chown root:wheel {app_bundle}/Contents || \
-   ! chmod 755 {app_bundle}/Contents || \
-   ! chown root:wheel {app_bundle}/Contents/MacOS || \
-   ! chmod 755 {app_bundle}/Contents/MacOS || \
-   ! chown root:wheel {app_bundle}/Contents/MacOS/service || \
-   ! chmod 755 {app_bundle}/Contents/MacOS/service || \
-   ! chown root:wheel {app_bundle}/Contents/MacOS/{app_name} || \
-   ! chmod 755 {app_bundle}/Contents/MacOS/{app_name}; then
+if ! chown root:wheel "{app_bundle}" || \
+   ! chmod 755 "{app_bundle}" || \
+   ! chown root:wheel "{app_bundle}/Contents" || \
+   ! chmod 755 "{app_bundle}/Contents" || \
+   ! chown root:wheel "{app_bundle}/Contents/MacOS" || \
+   ! chmod 755 "{app_bundle}/Contents/MacOS" || \
+   ! chown root:wheel "{app_bundle}/Contents/MacOS/service" || \
+   ! chmod 755 "{app_bundle}/Contents/MacOS/service" || \
+   ! chown root:wheel "{app_bundle}/Contents/MacOS/{app_name}" || \
+   ! chmod 755 "{app_bundle}/Contents/MacOS/{app_name}"; then
     echo "[root-update] hardening failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
     exit 1
 fi
