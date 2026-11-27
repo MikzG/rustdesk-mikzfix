@@ -27,6 +27,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
 import '../widgets/mikzfix_access.dart';
+import '../../common/widgets/mikzfix_about.dart';
 
 const double _kTabWidth = 200;
 const double _kTabHeight = 42;
@@ -2467,105 +2468,29 @@ class _AboutState extends State<_About> {
   @override
   Widget build(BuildContext context) {
     return futureBuilder(future: () async {
-      final license = await bind.mainGetLicense();
       final version = await bind.mainGetVersion();
       final buildDate = await bind.mainGetBuildDate();
       final fingerprint = await bind.mainGetFingerprint();
       final myId = await bind.mainGetMyId();
       return {
-        'license': license,
         'version': version,
         'buildDate': buildDate,
         'fingerprint': fingerprint,
         'myId': myId
       };
     }(), hasData: (data) {
-      final license = data['license'].toString();
-      final version = data['version'].toString();
-      final buildDate = data['buildDate'].toString();
-      final fingerprint = data['fingerprint'].toString();
-      final myId = data['myId'].toString();
-      const linkStyle = TextStyle(decoration: TextDecoration.underline);
+      // mikzfix: redesigned About (header, details card, link buttons, small licence line,
+      // "Made by MikzBots"), theme colours only.
       final scrollController = ScrollController();
       return SingleChildScrollView(
         controller: scrollController,
         child: _Card(title: translate('mikzfix_about_title'), children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                height: 8.0,
-              ),
-              SelectionArea(
-                  child: Text('${translate('Version')}: $version')
-                      .marginSymmetric(vertical: 4.0)),
-              SelectionArea(
-                  child: Text('${translate('Build Date')}: $buildDate')
-                      .marginSymmetric(vertical: 4.0)),
-              if (!isWeb)
-                SelectionArea(
-                    child: Text('${translate('Fingerprint')}: $fingerprint')
-                        .marginSymmetric(vertical: 4.0)),
-              SelectionArea(
-                  child: Text('${translate('ID')}: $myId')
-                      .marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://mikzfix.tech/privacy');
-                  },
-                  child: Text(
-                    translate('Privacy Statement'),
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://mikzfix.tech/remote');
-                  },
-                  child: Text(
-                    translate('Website'),
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              // mikzfix: terms + the AGPL-3.0 source offer (the fork is public).
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://mikzfix.tech/terms');
-                  },
-                  child: Text(
-                    'Termos / Terms',
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://github.com/MikzG/rustdesk-mikzfix');
-                  },
-                  child: Text(
-                    'Source code (AGPL-3.0)',
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              Container(
-                decoration: const BoxDecoration(color: MyTheme.accent),
-                padding:
-                    const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
-                child: SelectionArea(
-                    child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'MikzFix Remote, by MikzFix (mikzfix.tech).\nBased on RustDesk, Copyright © ${DateTime.now().toString().substring(0, 4)} Purslane Tech Pte. Ltd.\nLicensed under the GNU AGPL-3.0, WITHOUT ANY WARRANTY. Source: https://github.com/MikzG/rustdesk-mikzfix\n$license',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          const MikzBotsCredit().marginOnly(top: 8)
-                        ],
-                      ),
-                    ),
-                  ],
-                )),
-              ).marginSymmetric(vertical: 4.0)
-            ],
-          ).marginOnly(left: _kContentHMargin)
+          MikzfixAboutView(
+            version: data['version'].toString(),
+            buildDate: data['buildDate'].toString(),
+            id: data['myId'].toString(),
+            fingerprint: isWeb ? '' : data['fingerprint'].toString(),
+          ).marginOnly(left: _kContentHMargin, top: 8, bottom: 8),
         ]),
       );
     });

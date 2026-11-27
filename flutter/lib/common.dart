@@ -3789,17 +3789,25 @@ class _MikzBotsCreditState extends State<MikzBotsCredit> {
           launchUrl(Uri.parse(mikzBotsCreditUrl(context)),
               mode: LaunchMode.externalApplication);
         },
-        child: Opacity(
-          opacity: 0.7,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset('assets/mikzbots-mb.webp',
-                  height: 16, filterQuality: FilterQuality.medium),
-              const SizedBox(width: 6),
-              Text('Made by MikzBots', style: style),
-            ],
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The MB mark is dark; on a dark theme draw it as a light silhouette so it stays
+            // legible. On a light theme it keeps its own colours.
+            Theme.of(context).brightness == Brightness.dark
+                ? ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                        Colors.white.withOpacity(0.85), BlendMode.srcATop),
+                    child: Image.asset('assets/mikzbots-mb.webp',
+                        height: 16, filterQuality: FilterQuality.medium),
+                  )
+                : Image.asset('assets/mikzbots-mb.webp',
+                    height: 16, filterQuality: FilterQuality.medium),
+            const SizedBox(width: 6),
+            Opacity(
+                opacity: 0.8,
+                child: Text('Made by MikzBots', style: style)),
+          ],
         ),
       ),
     );

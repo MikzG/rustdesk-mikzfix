@@ -302,5 +302,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("mikzfix_access_question", "Allow MikzFix to access this PC?"),
         ("mikzfix_see_more", "See more"),
         ("mikzfix_see_less", "See less"),
+        ("mikzfix_privacy", "Privacy"),
+        ("mikzfix_terms", "Terms"),
+        ("mikzfix_source", "Source code"),
+        ("mikzfix_about_license", "MikzFix Remote, by MikzFix. Based on RustDesk © Purslane Tech Pte. Ltd. Licensed under the GNU AGPL-3.0, without any warranty."),
     ].iter().cloned().collect();
 }

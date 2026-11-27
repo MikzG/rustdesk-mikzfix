@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter_hbb/common/widgets/mikzfix_about.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -1130,24 +1131,22 @@ void showThemeSettings(OverlayDialogManager dialogManager) async {
 }
 
 void showAbout(OverlayDialogManager dialogManager) {
+  // mikzfix: same About view as desktop.
   dialogManager.show((setState, close, context) {
     return CustomAlertDialog(
       title: Text(translate('mikzfix_about_title')),
-      content: Wrap(direction: Axis.vertical, spacing: 12, children: [
-        Text('Version: $version'),
-        InkWell(
-            onTap: () async {
-              const url = 'https://mikzfix.tech/remote';
-              await launchUrl(Uri.parse(url));
-            },
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('mikzfix.tech',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                  )),
-            )),
-      ]),
+      contentBoxConstraints: const BoxConstraints(maxWidth: 420),
+      content: FutureBuilder<List<String>>(
+        future: Future.wait([
+          bind.mainGetMyId(),
+          bind.mainGetBuildDate(),
+        ]),
+        builder: (context, snap) => MikzfixAboutView(
+          version: version,
+          id: snap.data?[0] ?? '',
+          buildDate: snap.data?[1] ?? '',
+        ),
+      ),
       actions: [],
     );
   }, clickMaskDismiss: true, backDismiss: true);

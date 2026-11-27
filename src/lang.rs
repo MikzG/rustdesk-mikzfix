@@ -229,6 +229,8 @@ pub fn translate_locale(name: String, locale: &str) -> String {
             if s.contains("RustDesk")
                 && !name.starts_with("upgrade_rustdesk_server_pro")
                 && name != "powered_by_me"
+                // mikzfix: the licence line names RustDesk on purpose (attribution).
+                && name != "mikzfix_about_license"
             {
                 let app_name = crate::get_app_name();
                 if !app_name.contains("RustDesk") {
