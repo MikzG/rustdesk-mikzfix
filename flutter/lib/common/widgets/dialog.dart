@@ -875,11 +875,20 @@ class _PasswordWidgetState extends State<PasswordWidget> {
       hintText: translate(widget.hintText ?? 'Enter your password'),
       controller: widget.controller,
       prefixIcon: DialogTextField.kPasswordIcon,
+      // mikzfix: small, contained hover instead of the big default splash circle.
       suffixIcon: IconButton(
         icon: Icon(
             // Based on passwordVisible state choose the icon
             _passwordVisible ? Icons.visibility : Icons.visibility_off,
+            size: 18,
             color: MyTheme.lightTheme.primaryColor),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        splashRadius: 16,
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          hoverColor: Theme.of(context).hoverColor,
+        ),
         onPressed: () {
           // Update the state i.e. toggle the state of passwordVisible variable
           setState(() {

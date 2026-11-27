@@ -109,31 +109,41 @@ class ButtonOP extends StatelessWidget {
       Container(
         height: height,
         width: 200,
-        child: Obx(() => ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: curOP.value.isEmpty || curOP.value == op
-                  ? primaryColor
-                  : Colors.grey,
-            ).copyWith(elevation: ButtonStyleButton.allOrNull(0.0)),
-            onPressed: curOP.value.isEmpty || curOP.value == op ? onTap : null,
+        // mikzfix: secondary (outline) button in the theme colours instead of the
+        // pink-filled upstream style; icon and label centred together.
+        child: Obx(() {
+          final enabled = curOP.value.isEmpty || curOP.value == op;
+          final theme = Theme.of(context);
+          return OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.colorScheme.primary,
+              side: BorderSide(
+                  color: enabled
+                      ? theme.colorScheme.primary.withOpacity(0.6)
+                      : theme.dividerColor),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            onPressed: enabled ? onTap : null,
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 30,
-                  child: _IconOP(
-                    op: branding.iconKey,
-                    icon: icon,
-                    margin: EdgeInsets.only(right: 5),
-                  ),
+                _IconOP(
+                  op: branding.iconKey,
+                  icon: icon,
+                  margin: const EdgeInsets.only(right: 8),
                 ),
-                Expanded(
+                Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Center(child: Text(buttonLabel)),
+                    child: Text(buttonLabel),
                   ),
                 ),
               ],
-            ))),
+            ),
+          );
+        }),
       ),
     ]);
   }
