@@ -165,8 +165,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   List<SettingsTabKey> _mikzfixKeys = DesktopSettingPage.tabKeys;
 
   void _mikzfixOnLoginChanged() {
-    // Same delay as mikzfixApplyMainWindowMode: access_token is stored just after userName.
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.microtask(() {
       if (!mounted) return;
       final keys = DesktopSettingPage.tabKeys;
       if (listEquals(keys, _mikzfixKeys)) return;
@@ -192,8 +191,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   @override
   void initState() {
     super.initState();
-    _mikzfixLoginSub =
-        gFFI.userModel.userName.listen((_) => _mikzfixOnLoginChanged());
+    _mikzfixLoginSub = mikzfixLoggedIn.listen((_) => _mikzfixOnLoginChanged());
     WidgetsBinding.instance.addObserver(this);
     _videoConnTimer =
         periodic_immediate(Duration(milliseconds: 1000), () async {

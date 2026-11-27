@@ -44,6 +44,8 @@ class UserModel {
       //  For _updateLocalUserInfo, network error will be set later
       //  For login success, should clear network error
       networkError.value = '';
+      // mikzfix: keep the global login signal in step (covers OIDC and token refresh).
+      mikzfixRefreshLoginState();
     });
   }
 
@@ -123,6 +125,7 @@ class UserModel {
   Future<void> reset({bool resetOther = false}) async {
     await bind.mainSetLocalOption(key: 'access_token', value: '');
     await bind.mainSetLocalOption(key: 'user_info', value: '');
+    mikzfixRefreshLoginState();
     if (resetOther) {
       await gFFI.abModel.reset();
       await gFFI.groupModel.reset();

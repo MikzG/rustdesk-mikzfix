@@ -742,18 +742,15 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       }
     });
     _mikzfixWasIncomingOnly = bind.isIncomingOnly();
-    _mikzfixLoginSub = gFFI.userModel.userName.listen((_) {
-      // On login the user name is set a moment before access_token is stored (and
-      // isIncomingOnly() reads access_token), so check a little later.
-      Future.delayed(const Duration(milliseconds: 600), () async {
-        if (!mounted) return;
-        final incoming = bind.isIncomingOnly();
-        if (incoming == _mikzfixWasIncomingOnly) return;
-        _mikzfixWasIncomingOnly = incoming;
-        setState(() {});
-        await mikzfixApplyMainWindowMode();
-        if (incoming && isInHomePage()) _updateWindowSize();
-      });
+    mikzfixRefreshLoginState();
+    _mikzfixLoginSub = mikzfixLoggedIn.listen((_) async {
+      if (!mounted) return;
+      final incoming = bind.isIncomingOnly();
+      if (incoming == _mikzfixWasIncomingOnly) return;
+      _mikzfixWasIncomingOnly = incoming;
+      setState(() {});
+      await mikzfixApplyMainWindowMode();
+      if (incoming && isInHomePage()) _updateWindowSize();
     });
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();

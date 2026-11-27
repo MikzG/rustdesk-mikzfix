@@ -510,6 +510,7 @@ Future<bool?> loginDialog() async {
                   key: 'access_token', value: resp.access_token!);
               await bind.mainSetLocalOption(
                   key: 'user_info', value: jsonEncode(resp.user ?? {}));
+              mikzfixRefreshLoginState();
             }
             if (close != null) {
               close(true);
@@ -722,6 +723,7 @@ Future<bool?> verificationCodeDialog(
             if (resp.access_token != null) {
               await bind.mainSetLocalOption(
                   key: 'access_token', value: resp.access_token!);
+              mikzfixRefreshLoginState();
               close(true);
               return;
             }

@@ -3914,6 +3914,20 @@ Widget loadIcon(double size) {
           ));
 }
 
+/// mikzfix: the login state as one reactive signal for the whole UI. Everything that depends
+/// on login (incoming-only mode, locked Settings, panes, tabs, window size) listens to it, so
+/// login and logout take effect at once without restarting. It reads `access_token`, which is
+/// what isIncomingOnly()/isDisableSettings() read on the Rust side, and is refreshed right
+/// after the token is written or cleared (login.dart, UserModel.reset) and on userName changes.
+final RxBool mikzfixLoggedIn = RxBool(false);
+
+void mikzfixRefreshLoginState() {
+  try {
+    mikzfixLoggedIn.value =
+        bind.mainGetLocalOption(key: 'access_token').isNotEmpty;
+  } catch (_) {}
+}
+
 // mikzfix: main window with both panes (logged in) vs the compact incoming-only one.
 const double kMikzfixMainMinWidth = 720.0;
 const Size kMikzfixMainDefaultSize = Size(900, 600);

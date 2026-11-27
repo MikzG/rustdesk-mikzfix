@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
@@ -39,10 +41,27 @@ class HomePageState extends State<HomePage> {
     });
   }
 
+  // mikzfix: login/logout changes incoming-only and locked settings; rebuild the pages.
+  StreamSubscription? _mikzfixLoginSub;
+
   @override
   void initState() {
     super.initState();
     initPages();
+    mikzfixRefreshLoginState();
+    _mikzfixLoginSub = mikzfixLoggedIn.listen((_) {
+      if (!mounted) return;
+      refreshPages();
+      if (_selectedIndex >= _pages.length) {
+        setState(() => _selectedIndex = _pages.length - 1);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _mikzfixLoginSub?.cancel();
+    super.dispose();
   }
 
   void initPages() {
