@@ -1707,7 +1707,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.job.arch }}" in x86_64) S=;; aarch64) S=_arm64;; *) S=_${{ matrix.job.arch }};; esac
-          mkdir -p release
+          sudo mkdir -p release; sudo chown -R "$(id -u):$(id -g)" release
           for f in rustdesk-*.deb; do [ -e "$f" ] && cp "$f" "release/MikzFix_RemoteDesk$S.deb"; done
           for f in rustdesk-*.rpm; do
             [ -e "$f" ] || continue
@@ -1755,7 +1755,9 @@ jobs:
         if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
-          mkdir -p release
+          # o passo anterior corre num contentor como root e pode deixar release/ de root
+          sudo mkdir -p release
+          sudo chown -R "$(id -u):$(id -g)" release
           for f in res/rustdesk-${{ env.VERSION }}*.zst; do [ -e "$f" ] && cp "$f" release/MikzFix_RemoteDesk.pkg.tar.zst; done
           ls -l release
 
@@ -2042,7 +2044,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.job.arch }}" in x86_64) S=;; aarch64) S=_arm64;; *) S=_${{ matrix.job.arch }};; esac
-          mkdir -p release
+          sudo mkdir -p release; sudo chown -R "$(id -u):$(id -g)" release
           for f in ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage; do [ -e "$f" ] && cp "$f" "release/MikzFix_RemoteDesk$S.AppImage"; done
           ls -l release
 
