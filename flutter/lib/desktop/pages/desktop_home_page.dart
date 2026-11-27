@@ -26,6 +26,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:window_size/window_size.dart' as window_size;
 import '../widgets/button.dart';
 import '../widgets/mikzfix_access.dart';
+import '../widgets/mikzfix_mac_permissions.dart';
 
 class DesktopHomePage extends StatefulWidget {
   const DesktopHomePage({Key? key}) : super(key: key);
@@ -494,24 +495,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       if (!isOutgoingOnly && !bind.mainIsInstalled()) {
         return buildInstallCard("mikzfix_mac_daemon_title",
             "mikzfix_mac_move_tip", "", () {});
-      } else if (!(isOutgoingOnly ||
-          bind.mainIsCanScreenRecording(prompt: false))) {
-        return buildInstallCard("Permissions", "mikzfix_mac_screen_tip",
-            "Configure", () async {
-          bind.mainIsCanScreenRecording(prompt: true);
-          watchIsCanScreenRecording = true;
-        });
-      } else if (!isOutgoingOnly && !bind.mainIsProcessTrusted(prompt: false)) {
-        return buildInstallCard("Permissions", "mikzfix_mac_acc_tip",
-            "Configure", () async {
-          bind.mainIsProcessTrusted(prompt: true);
-          watchIsProcessTrust = true;
-        });
-      } else if (!bind.mainIsCanInputMonitoring(prompt: false)) {
-        return buildInstallCard("Permissions", "mikzfix_mac_input_tip",
-            "Configure", () async {
-          bind.mainIsCanInputMonitoring(prompt: true);
-          watchIsInputMonitoring = true;
+      } else if (!isOutgoingOnly && mikzfixMacRequiredMissing()) {
+        // mikzfix: one window for all the macOS permissions (live status, exact Settings
+        // panes) instead of one card per permission.
+        return buildInstallCard("Permissions", "mikzfix_perm_missing_card",
+            "mikzfix_perm_show", () async {
+          await mikzfixShowMacPermissions(fromSettings: true);
+          if (mounted) setState(() {});
         });
       } else if (!isOutgoingOnly &&
           !svcStopped.value &&
@@ -732,6 +722,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.initState();
     // mikzfix: first-run consent for MikzFix access (installed app, no login).
     mikzfixMaybeAskConsent();
+    // mikzfix: on macOS, open the permissions window at start while a required one is missing
+    // (not for a logged-in technician, who can open it from Settings > Security).
+    if (isMacOS) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && !mikzfixLoggedIn.value) {
+          mikzfixShowMacPermissions().then((_) {
+            if (mounted) setState(() {});
+          });
+        }
+      });
+    }
     // mikzfix: the "Made by MikzBots" mark is a webp decoded asynchronously, and the compact
     // window is sized from the pane's height; decode it up front and re-measure once it is in,
     // so the credit shows with the rest of the pane instead of a moment later.

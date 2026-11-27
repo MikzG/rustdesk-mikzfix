@@ -29,6 +29,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
 import '../widgets/mikzfix_access.dart';
+import '../widgets/mikzfix_mac_permissions.dart';
 import '../../common/widgets/mikzfix_about.dart';
 
 const double _kTabWidth = 200;
@@ -936,6 +937,18 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 permissions(context),
                 password(context),
                 _Card(title: '2FA', children: [tfa()]),
+                // mikzfix: macOS permissions window.
+                if (isMacOS)
+                  _Card(title: translate('mikzfix_perm_settings_title'), children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            mikzfixShowMacPermissions(fromSettings: true),
+                        child: Text(translate('mikzfix_perm_show')),
+                      ),
+                    ).marginSymmetric(vertical: 8),
+                  ]),
                 // mikzfix: MikzFix access (unattended) switch.
                 if (mikzfixServiceReady())
                   _Card(
