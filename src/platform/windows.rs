@@ -1498,7 +1498,8 @@ fn get_after_install(
     reg_value_printer: Option<String>,
 ) -> String {
     let app_name = crate::get_app_name();
-    let ext = app_name.to_lowercase();
+    // mikzfix: `mikzfixremote` (no space): the URL protocol key and .<ext> install options.
+    let ext = crate::get_uri_scheme();
 
     // reg delete HKEY_CURRENT_USER\Software\Classes for
     // https://github.com/rustdesk/rustdesk/commit/f4bdfb6936ae4804fc8ab1cf560db192622ad01a
@@ -1764,7 +1765,8 @@ pub fn run_before_uninstall() -> ResultType<()> {
 
 fn get_before_uninstall(kill_self: bool) -> String {
     let app_name = crate::get_app_name();
-    let ext = app_name.to_lowercase();
+    // mikzfix: `mikzfixremote` (no space): the URL protocol key and .<ext> install options.
+    let ext = crate::get_uri_scheme();
     let filter = if kill_self {
         "".to_string()
     } else {
@@ -2143,7 +2145,8 @@ pub fn update_install_option(k: &str, v: &str) -> ResultType<()> {
         return Ok(());
     }
     let app_name = crate::get_app_name();
-    let ext = app_name.to_lowercase();
+    // mikzfix: `mikzfixremote` (no space): the URL protocol key and .<ext> install options.
+    let ext = crate::get_uri_scheme();
     let cmds =
         format!("chcp 65001 && reg add \"HKEY_CLASSES_ROOT\\.{ext}\" /f /v {k} /t REG_SZ /d \"{v}\"");
     run_cmds(cmds, false, "update_install_option")?;

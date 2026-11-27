@@ -207,7 +207,7 @@ class WebHomePage extends StatelessWidget {
           return;
         }
         list.removeAt(0);
-        fakelink = "rustdesk://${list.join(s)}";
+        fakelink = "${bind.mainUriPrefixSync()}${list.join(s)}";
         break;
       }
     }

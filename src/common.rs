@@ -1022,9 +1022,16 @@ pub fn get_sys_name() -> String {
     get_app_name().replace(' ', "")
 }
 
+/// mikzfix: link scheme without the space of the app name: `mikzfixremote://<id>`, the same
+/// on Windows (registry), macOS (Info.plist), Linux (.desktop) and Android (intent filter).
+#[inline]
+pub fn get_uri_scheme() -> String {
+    get_app_name().to_lowercase().replace(' ', "")
+}
+
 #[inline]
 pub fn get_uri_prefix() -> String {
-    format!("{}://", get_app_name().to_lowercase())
+    format!("{}://", get_uri_scheme())
 }
 
 #[cfg(target_os = "macos")]
