@@ -44,6 +44,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   bool get wantKeepAlive => true;
   var systemError = '';
   StreamSubscription? _uniLinksSubscription;
+  // mikzfix: login/logout switches incoming-only on and off; resize and rebuild live.
+  StreamSubscription? _mikzfixLoginSub;
+  bool? _mikzfixWasIncomingOnly;
   var svcStopped = false.obs;
   var watchIsCanScreenRecording = false;
   var watchIsProcessTrust = false;
@@ -707,6 +710,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.initState();
     // mikzfix: first-run consent for MikzFix access (installed app, no login).
     mikzfixMaybeAskConsent();
+    _mikzfixWasIncomingOnly = bind.isIncomingOnly();
+    _mikzfixLoginSub = gFFI.userModel.userName.listen((_) {
+      // On login the user name is set a moment before access_token is stored (and
+      // isIncomingOnly() reads access_token), so check a little later.
+      Future.delayed(const Duration(milliseconds: 600), () async {
+        if (!mounted) return;
+        final incoming = bind.isIncomingOnly();
+        if (incoming == _mikzfixWasIncomingOnly) return;
+        _mikzfixWasIncomingOnly = incoming;
+        setState(() {});
+        await mikzfixApplyMainWindowMode();
+        if (incoming && isInHomePage()) _updateWindowSize();
+      });
+    });
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
       final error = await bind.mainGetError();
@@ -886,6 +903,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   @override
   void dispose() {
+    _mikzfixLoginSub?.cancel();
     _uniLinksSubscription?.cancel();
     Get.delete<RxBool>(tag: 'stop-service');
     _updateTimer?.cancel();

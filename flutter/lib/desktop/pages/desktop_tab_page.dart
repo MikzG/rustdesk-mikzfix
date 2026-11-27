@@ -52,8 +52,10 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
         page: DesktopHomePage(
           key: const ValueKey(kTabLabelHomePage),
         )));
-    if (bind.isIncomingOnly()) {
+    // mikzfix: incoming-only changes with login/logout at runtime, so decide per selection.
+    {
       tabController.onSelected = (key) {
+        if (!bind.isIncomingOnly()) return;
         if (key == kTabLabelHomePage) {
           windowManager.setSize(getIncomingOnlyHomeSize());
           setResizable(false);

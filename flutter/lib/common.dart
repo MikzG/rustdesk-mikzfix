@@ -2101,13 +2101,26 @@ Future<bool> restoreWindowPosition(WindowType type,
     }
   }
 
-  final size = await _adjustRestoreMainWindowSize(lpos.width, lpos.height);
-  final offsetLeftTop = await _adjustRestoreMainWindowOffset(
-    lpos.offsetWidth,
-    lpos.offsetHeight,
-    size.width,
-    size.height,
-  );
+  var size = await _adjustRestoreMainWindowSize(lpos.width, lpos.height);
+  // mikzfix: the saved size may be the compact one of the logged-out (incoming-only) mode.
+  // With both panes (logged in) that cuts the right pane off, so fall back to the default
+  // size, centred. Incoming-only keeps its compact size (it is not restored from here).
+  var mikzfixRecentre = false;
+  if (type == WindowType.Main &&
+      !bind.isIncomingOnly() &&
+      size.width < kMikzfixMainMinWidth) {
+    size = kMikzfixMainDefaultSize;
+    lpos.isMaximized = false;
+    mikzfixRecentre = true;
+  }
+  final offsetLeftTop = mikzfixRecentre
+      ? null
+      : await _adjustRestoreMainWindowOffset(
+          lpos.offsetWidth,
+          lpos.offsetHeight,
+          size.width,
+          size.height,
+        );
   debugPrint(
       "restore lpos: ${size.width}/${size.height}, offset:${offsetLeftTop?.dx}/${offsetLeftTop?.dy}, isMaximized: ${lpos.isMaximized}, isFullscreen: ${lpos.isFullscreen}");
 
@@ -3899,6 +3912,27 @@ Widget loadIcon(double size) {
             width: size,
             height: size,
           ));
+}
+
+// mikzfix: main window with both panes (logged in) vs the compact incoming-only one.
+const double kMikzfixMainMinWidth = 720.0;
+const Size kMikzfixMainDefaultSize = Size(900, 600);
+
+/// mikzfix: login/logout switches between incoming-only (compact, fixed size) and the full
+/// client without a restart. Called when the logged-in user changes.
+Future<void> mikzfixApplyMainWindowMode() async {
+  if (!isDesktop) return;
+  if (bind.isIncomingOnly()) {
+    await windowManager.setSize(getIncomingOnlyHomeSize());
+    setResizable(false);
+  } else {
+    setResizable(true);
+    final s = await windowManager.getSize();
+    if (s.width < kMikzfixMainMinWidth) {
+      await windowManager.setSize(kMikzfixMainDefaultSize);
+      await windowManager.center();
+    }
+  }
 }
 
 var imcomingOnlyHomeSize = Size(280, 300);
