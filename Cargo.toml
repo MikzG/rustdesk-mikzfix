@@ -226,6 +226,8 @@ hbb_common = { path = "libs/hbb_common" }
 os-version = "0.2"
 
 [dev-dependencies]
+# mikzfix: tests of this package never write the real app config (see hbb_common config.rs).
+hbb_common = { path = "libs/hbb_common", features = ["test-isolated-config"] }
 hound = "3.5"
 docopt = "1.1"
 

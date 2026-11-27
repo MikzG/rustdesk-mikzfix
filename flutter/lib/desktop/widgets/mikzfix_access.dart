@@ -20,16 +20,17 @@ bool mikzfixIsLoggedIn() {
   }
 }
 
-/// Shows the first-run consent once, on an installed desktop app, when nobody is logged in.
-/// A logged-in machine (Miguel's) is never asked and stays "N".
 /// "Start at login" (service option; empty = on, the default). Windows: the service keeps the
-/// tray Startup shortcut in step. macOS: a per-user LaunchAgent written here (no admin).
+/// tray Startup shortcut in step. macOS without the service: a per-user LaunchAgent written
+/// here (no admin). macOS with the service: its LaunchAgent starts --server for every user and
+/// that process shows the icon, so ours is removed and the switch is hidden.
 /// Linux: unchanged, the existing autostart entry.
 const kOptionMikzfixStartAtLogin = 'mikzfix-start-at-login';
 const _kMacStartupLabel = 'tech.mikzfix.remote.startup';
 
 bool mikzfixStartAtLoginSupported() =>
-    (isWindows || isMacOS) && bind.mainIsInstalled();
+    (isWindows || (isMacOS && !bind.mainIsInstalledDaemon(prompt: false))) &&
+    bind.mainIsInstalled();
 
 bool mikzfixStartAtLoginOn() =>
     bind.mainGetOptionSync(key: kOptionMikzfixStartAtLogin) != 'N';
@@ -44,7 +45,10 @@ Future<void> _macApplyStartAtLogin(bool on) async {
       if (await f.exists()) await f.delete();
       return;
     }
-    final exe = Platform.resolvedExecutable;
+    final exe = Platform.resolvedExecutable
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
     final plist = '''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -74,14 +78,15 @@ Future<void> _macApplyStartAtLogin(bool on) async {
 
 Future<void> mikzfixSetStartAtLogin(bool on) async {
   await bind.mainSetOption(key: kOptionMikzfixStartAtLogin, value: on ? 'Y' : 'N');
-  if (isMacOS) await _macApplyStartAtLogin(on);
+  if (isMacOS) await _macApplyStartAtLogin(on && mikzfixStartAtLoginSupported());
 }
 
 /// At app start: make the macOS LaunchAgent match the option (on by default once installed).
 Future<void> mikzfixApplyStartAtLoginAtStartup() async {
-  if (!isMacOS || !mikzfixStartAtLoginSupported()) return;
+  if (!isMacOS || !bind.mainIsInstalled()) return;
   await Future.delayed(const Duration(seconds: 3));
-  await _macApplyStartAtLogin(mikzfixStartAtLoginOn());
+  // With the service installed our LaunchAgent would only add a second icon: remove it.
+  await _macApplyStartAtLogin(mikzfixStartAtLoginSupported() && mikzfixStartAtLoginOn());
 }
 
 class MikzfixStartAtLoginTile extends StatefulWidget {
@@ -151,6 +156,8 @@ bool mikzfixServiceReady() {
   return true;
 }
 
+/// Shows the first-run consent once, on an installed desktop app, when nobody is logged in.
+/// A logged-in machine (Miguel's) is never asked and stays "N".
 Future<void> mikzfixMaybeAskConsent() async {
   if (!isDesktop) return;
   // Give the IPC option cache a moment to load the service config.

@@ -3702,18 +3702,32 @@ pub fn mikzfix_sync_tray_autostart(want: bool) -> ResultType<()> {
     if !want && exists {
         std::fs::remove_file(&lnk)?;
     } else if want && !exists {
+        // Never through %TEMP%: for SYSTEM that is C:\Windows\Temp, where any user can plant the
+        // script first and have it run as SYSTEM. The install folder is admin-only, and the
+        // shortcut is written straight into Startup.
         let (_, path, _, exe) = get_install_info();
-        let tmp_path = std::env::temp_dir().to_string_lossy().to_string();
-        let vbs = get_tray_shortcut(&path, &exe, &exe, &tmp_path)?;
+        let vbs = std::path::Path::new(&path).join(format!("{}_tray_autostart.vbs", app_name));
+        let _ = std::fs::remove_file(&vbs);
+        let script = format!(
+            "Set oWS = WScript.CreateObject(\"WScript.Shell\")\r\nSet oLink = oWS.CreateShortcut(\"{lnk}\")\r\noLink.TargetPath = \"{exe}\"\r\noLink.Arguments = \"--tray\"\r\n{icon}\r\noLink.Save\r\n",
+            icon = get_shortcut_icon_location(&path, &exe),
+        );
+        {
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&vbs)?;
+            f.write_all(script.as_bytes())?;
+        }
         let status = std::process::Command::new("cscript")
             .arg("//nologo")
             .arg(&vbs)
             .creation_flags(CREATE_NO_WINDOW)
-            .status()?;
-        if !status.success() {
+            .status();
+        let _ = std::fs::remove_file(&vbs);
+        if !status?.success() {
             bail!("cscript failed creating the tray shortcut");
         }
-        std::fs::copy(format!("{}\\{} Tray.lnk", tmp_path, app_name), &lnk)?;
     }
     Ok(())
 }

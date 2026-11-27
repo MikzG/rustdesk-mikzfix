@@ -88,6 +88,9 @@ struct Enroller {
     /// Windows "Start at login" value last applied to the Startup shortcut.
     #[allow(dead_code)]
     autostart_applied: Option<bool>,
+    /// Failed attempts for the current value; retried on later cycles up to a limit.
+    #[allow(dead_code)]
+    autostart_failures: u8,
 }
 
 /// mikzfix: "Start at login" (`""`/`"Y"` = on, the default; `"N"` = off). Set by the UI
@@ -106,11 +109,22 @@ impl Enroller {
             Ok(()) => {
                 log::info!("mikzfix start-at-login={}", want);
                 self.autostart_applied = Some(want);
+                self.autostart_failures = 0;
             }
             Err(e) => {
-                // Not retried until the value changes or the service restarts.
-                log::warn!("mikzfix start-at-login={} failed: {}", want, e);
-                self.autostart_applied = Some(want);
+                // Retried on the next cycles; after 3 failures, only when the value changes or
+                // the service restarts.
+                self.autostart_failures += 1;
+                log::warn!(
+                    "mikzfix start-at-login={} failed ({}): {}",
+                    want,
+                    self.autostart_failures,
+                    e
+                );
+                if self.autostart_failures >= 3 {
+                    self.autostart_applied = Some(want);
+                    self.autostart_failures = 0;
+                }
             }
         }
     }

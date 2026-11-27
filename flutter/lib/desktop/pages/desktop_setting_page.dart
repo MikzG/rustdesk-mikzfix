@@ -170,7 +170,11 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
     Future.microtask(() {
       if (!mounted) return;
       final keys = DesktopSettingPage.tabKeys;
-      if (listEquals(keys, _mikzfixKeys)) return;
+      if (listEquals(keys, _mikzfixKeys)) {
+        // Same tabs, but General shows a different set (full vs minimal): rebuild it.
+        setState(() {});
+        return;
+      }
       _mikzfixKeys = keys;
       // Keep the selected tab if it still exists; otherwise (logout from a locked tab) go to
       // Account, where the user just logged out, or to the first tab.
@@ -260,7 +264,8 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
     for (final tab in DesktopSettingPage.tabKeys) {
       switch (tab) {
         case SettingsTabKey.general:
-          children.add(const _General());
+          // Keyed on the login state so the full/minimal General is rebuilt on login/logout.
+          children.add(_General(key: ValueKey('general-${mikzfixLoggedIn.value}')));
           break;
         case SettingsTabKey.safety:
           children.add(const _Safety());

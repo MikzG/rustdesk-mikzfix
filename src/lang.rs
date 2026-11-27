@@ -53,57 +53,9 @@ mod ge;
 mod fi;
 mod ml;
 
-pub const LANGS: &[(&str, &str)] = &[
-    ("en", "English"),
-    ("it", "Italiano"),
-    ("fr", "Français"),
-    ("de", "Deutsch"),
-    ("nl", "Nederlands"),
-    ("nb", "Norsk bokmål"),
-    ("zh-cn", "简体中文"),
-    ("zh-tw", "繁體中文"),
-    ("pt", "Português"),
-    ("es", "Español"),
-    ("et", "Eesti keel"),
-    ("eu", "Euskara"),
-    ("hu", "Magyar"),
-    ("bg", "Български"),
-    ("be", "Беларуская"),
-    ("ru", "Русский"),
-    ("sk", "Slovenčina"),
-    ("id", "Indonesia"),
-    ("cs", "Čeština"),
-    ("da", "Dansk"),
-    ("eo", "Esperanto"),
-    ("tr", "Türkçe"),
-    ("vi", "Tiếng Việt"),
-    ("pl", "Polski"),
-    ("ja", "日本語"),
-    ("ko", "한국어"),
-    ("kz", "Қазақ"),
-    ("uk", "Українська"),
-    ("fa", "فارسی"),
-    ("ca", "Català"),
-    ("el", "Ελληνικά"),
-    ("sv", "Svenska"),
-    ("sq", "Shqip"),
-    ("sr", "Srpski"),
-    ("th", "ภาษาไทย"),
-    ("sl", "Slovenščina"),
-    ("ro", "Română"),
-    ("lt", "Lietuvių"),
-    ("lv", "Latviešu"),
-    ("ar", "العربية"),
-    ("he", "עברית"),
-    ("hr", "Hrvatski"),
-    ("sc", "Sardu"),
-    ("ta", "தமிழ்"),
-    ("ge", "ქართული"),
-    ("fi", "Suomi"),
-    ("ml", "മലയാളം"),
-    ("hi", "हिंदी"),
-    ("gu", "ગુજરાતી"),
-];
+// mikzfix: the app ships in Portuguese (Portugal) and English only; our own strings exist in
+// these two, so any other language would show a mix.
+pub const LANGS: &[(&str, &str)] = &[("en", "English"), ("pt", "Português")];
 
 pub(crate) fn cjk_ui_unavailable() -> bool {
     cfg!(all(
@@ -147,10 +99,12 @@ fn resolve_lang(saved_lang: &str, locale: &str, cjk_fallback: bool) -> String {
             .unwrap_or_default()
             .to_owned();
     }
-    if cjk_fallback && is_cjk_lang(&lang) {
-        "en".to_owned()
+    let _ = cjk_fallback;
+    // mikzfix: only pt (pt-PT, also for a Brazilian system) and en.
+    if lang == "pt" || lang == "br" {
+        "pt".to_owned()
     } else {
-        lang
+        "en".to_owned()
     }
 }
 
@@ -333,11 +287,19 @@ mod test {
     }
 
     #[test]
-    fn test_resolve_lang_preserves_cjk_when_target_allows_cjk() {
+    fn test_resolve_lang_only_pt_or_en() {
+        // mikzfix: the app ships in pt-PT and en only (CJK included, whatever the target).
         use super::resolve_lang as f;
 
-        assert_eq!(f("zh-cn", "en-US", false), "zh-cn");
-        assert_eq!(f("", "zh_TW", false), "zh-tw");
-        assert_eq!(f("", "ja-JP", false), "ja");
+        assert_eq!(f("zh-cn", "en-US", false), "en");
+        assert_eq!(f("", "zh_TW", false), "en");
+        assert_eq!(f("", "ja-JP", false), "en");
+        assert_eq!(f("", "fr-FR", false), "en");
+        assert_eq!(f("de", "pt-PT", false), "en");
+        assert_eq!(f("", "pt-PT", false), "pt");
+        assert_eq!(f("", "pt_BR", false), "pt");
+        assert_eq!(f("br", "en-US", false), "pt");
+        assert_eq!(f("pt", "en-US", false), "pt");
+        assert_eq!(f("en", "pt-PT", false), "en");
     }
 }

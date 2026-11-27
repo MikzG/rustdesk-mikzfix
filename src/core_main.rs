@@ -380,6 +380,12 @@ pub fn core_main() -> Option<Vec<String>> {
                 return None;
             }
         } else if args[0] == "--tray" {
+            // mikzfix: on macOS the --server process of this user already shows the tray icon;
+            // a second --tray (our login LaunchAgent) would add a second icon.
+            #[cfg(target_os = "macos")]
+            if crate::check_process("--server", true) {
+                return None;
+            }
             if !crate::check_process("--tray", true) {
                 crate::tray::start_tray();
             }
