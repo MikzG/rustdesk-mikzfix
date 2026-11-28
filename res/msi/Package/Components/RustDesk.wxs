@@ -31,6 +31,23 @@
 		<CustomAction Id="TryDeleteStartupShortcut.SetParam" Return="check" Property="ShortcutName" Value="$(var.Product) Tray" />
 		<CustomAction Id="RemoveAmyuniIdd.SetParam" Return="check" Property="RemoveAmyuniIdd" Value="[INSTALLFOLDER_INNER]" />
 		<CustomAction Id="InstallPrinter.SetParam" Return="check" Property="InstallPrinter" Value="[INSTALLFOLDER_INNER]" />
+
+		<!-- mikzfix: installer choices (ShortcutProperties.wxs) go into the service Config as SYSTEM,
+			 after the files are installed and before CreateStartService, so the enrol loop and the
+			 consent dialog of the app already see them on the first run. -->
+		<CustomAction Id="MikzfixSetUnattended" FileRef="App.exe" ExeCommand="--mikzfix-install-option mikzfix-unattended Y" Execute="deferred" Impersonate="no" Return="ignore" />
+		<CustomAction Id="MikzfixSetStartAtLoginOn" FileRef="App.exe" ExeCommand="--mikzfix-install-option mikzfix-start-at-login Y" Execute="deferred" Impersonate="no" Return="ignore" />
+		<CustomAction Id="MikzfixSetStartAtLoginOff" FileRef="App.exe" ExeCommand="--mikzfix-install-option mikzfix-start-at-login N" Execute="deferred" Impersonate="no" Return="ignore" />
+
+		<!-- mikzfix: on a major upgrade STOP_SERVICE came only from the installing user's copy of the
+			 config (SetPropertyServiceStop below), never from the old service itself, so a stale
+			 stop-service='Y' there left the machine with no service. Read whether the old service is
+			 running before RemoveExistingProducts deletes it; if it is, keep it ('N'). A service that
+			 was stopped on purpose is deleted (uninstall_service), so the config still decides then. -->
+		<CustomAction Id="MikzfixUpgradeServiceRunning.SetParam.AppName" Return="check" Property="AppName" Value="$(var.Product)" />
+		<CustomAction Id="MikzfixUpgradeServiceRunning.SetParam.PropertyName" Return="check" Property="PropertyName" Value="MIKZFIX_OLD_SERVICE_STOPPED" />
+		<SetProperty Action="MikzfixKeepServiceOnUpgrade" Id="STOP_SERVICE" Value="&apos;N&apos;" After="SetPropertyServiceStop" Sequence="execute" Condition="WIX_UPGRADE_DETECTED AND NOT Installed AND MIKZFIX_OLD_SERVICE_STOPPED=&quot;&apos;N&apos;&quot;" />
+
 		<InstallExecuteSequence>
 
 			<Custom Action="SetPropertyIsServiceRunning" After="InstallInitialize" Condition="Installed" />
@@ -41,6 +58,14 @@
 			<Custom Action="SetPropertyServiceStop.SetParam.ConfigFile" Before="SetPropertyServiceStop" Condition="NOT Installed" />
 			<Custom Action="SetPropertyServiceStop.SetParam.ConfigKey" Before="SetPropertyServiceStop" Condition="NOT Installed" />
 			<Custom Action="SetPropertyServiceStop.SetParam.PropertyName" Before="SetPropertyServiceStop" Condition="NOT Installed" />
+
+			<Custom Action="MikzfixUpgradeServiceRunning" Before="InstallInitialize" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+			<Custom Action="MikzfixUpgradeServiceRunning.SetParam.AppName" Before="MikzfixUpgradeServiceRunning" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+			<Custom Action="MikzfixUpgradeServiceRunning.SetParam.PropertyName" Before="MikzfixUpgradeServiceRunning" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+
+			<Custom Action="MikzfixSetUnattended" Before="CreateStartService" Condition="(NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;) AND (MIKZFIX_UNATTENDED = 1 OR MIKZFIX_UNATTENDED = &quot;Y&quot; OR MIKZFIX_UNATTENDED = &quot;y&quot;)" />
+			<Custom Action="MikzfixSetStartAtLoginOn" Before="CreateStartService" Condition="(NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;) AND MIKZFIX_START_AT_LOGIN_SET AND (MIKZFIX_START_AT_LOGIN = 1 OR MIKZFIX_START_AT_LOGIN = &quot;Y&quot; OR MIKZFIX_START_AT_LOGIN = &quot;y&quot;)" />
+			<Custom Action="MikzfixSetStartAtLoginOff" Before="CreateStartService" Condition="(NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;) AND MIKZFIX_START_AT_LOGIN_SET AND NOT (MIKZFIX_START_AT_LOGIN = 1 OR MIKZFIX_START_AT_LOGIN = &quot;Y&quot; OR MIKZFIX_START_AT_LOGIN = &quot;y&quot;)" />
 
 			<!-- Do not call CreateStartService if is uninstalling. -->
 			<!-- (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE) means uninstalling. -->

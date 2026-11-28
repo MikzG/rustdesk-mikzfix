@@ -52,5 +52,8 @@ This file contains the declaration of all the localizable strings.
 	<String Id="MyInstallDirDlgDesktopShortcuts" Value="Create desktop icon" />
 	<String Id="MyInstallDirDlgStartMenuShortcuts" Value="Create start menu shortcuts" />
 	<String Id="MyInstallDirDlgPrinter" Value="Install RustDesk Printer" />
+	<!-- mikzfix: pt-PT on purpose (en: "Allow unattended access", "Start with the computer"). -->
+	<String Id="MyInstallDirDlgMikzfixUnattended" Value="Permitir acesso sem supervisão" />
+	<String Id="MyInstallDirDlgMikzfixStartAtLogin" Value="Iniciar com o computador" />
 
 </WixLocalization>

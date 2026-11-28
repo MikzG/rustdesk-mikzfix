@@ -15,6 +15,8 @@
 		<CustomAction Id="TryStopDeleteService" DllEntry="TryStopDeleteService" Impersonate="no" Execute="deferred" Return="ignore" BinaryRef="Custom_Actions_Dll"/>
 		<CustomAction Id="TryDeleteStartupShortcut" DllEntry="TryDeleteStartupShortcut" Impersonate="yes" Execute="immediate" Return="ignore" BinaryRef="Custom_Actions_Dll"/>
 		<CustomAction Id="SetPropertyServiceStop" DllEntry="SetPropertyFromConfig" Impersonate="yes" Execute="immediate" Return="ignore" BinaryRef="Custom_Actions_Dll"/>
+		<!-- mikzfix: same check as SetPropertyIsServiceRunning, for the old service of a major upgrade (RustDesk.wxs). -->
+		<CustomAction Id="MikzfixUpgradeServiceRunning" DllEntry="SetPropertyIsServiceRunning" Impersonate="yes" Execute="immediate" Return="ignore" BinaryRef="Custom_Actions_Dll"/>
 		<CustomAction Id="AddRegSoftwareSASGeneration" DllEntry="AddRegSoftwareSASGeneration" Impersonate="no" Execute="deferred" Return="ignore" BinaryRef="Custom_Actions_Dll"/>
 		<CustomAction Id="RemoveAmyuniIdd" DllEntry="RemoveAmyuniIdd" Impersonate="no" Execute="deferred" Return="ignore" BinaryRef="Custom_Actions_Dll"/>
 		<CustomAction Id="InstallPrinter" DllEntry="InstallPrinter" Impersonate="no" Execute="deferred" Return="ignore" BinaryRef="Custom_Actions_Dll"/>

@@ -83,5 +83,26 @@
 		<SetProperty Action="SetPrinterValueEnabled" Id="PRINTER" Value="1" After="RestoreSavedPrinterValue" Sequence="first" Condition="INSTALLPRINTER = 1 OR INSTALLPRINTER = &quot;Y&quot; OR INSTALLPRINTER = &quot;y&quot;" />
 		<SetProperty Action="SetPrinterValueDisabled" Id="PRINTER" Value="" After="SetPrinterValueEnabled" Sequence="first" Condition="INSTALLPRINTER AND NOT (INSTALLPRINTER = 1 OR INSTALLPRINTER = &quot;Y&quot; OR INSTALLPRINTER = &quot;y&quot;)" />
 
+		<!-- mikzfix: installer choices that RustDesk.wxs writes into the service Config.
+				 MIKZFIX_UNATTENDED: 1 = allow unattended access now (mikzfix-unattended=Y);
+				 0 or empty = the app asks on first run, as before.
+				 MIKZFIX_START_AT_LOGIN: 1 = start with the computer (mikzfix-start-at-login=Y);
+				 0 = off (N).
+				 Both default to 1 (checked) on a new install only. On an upgrade or repair the choices
+				 made in the app are kept, unless the property is passed on the command line. -->
+		<Property Id="MIKZFIX_UNATTENDED" Secure="yes"></Property>
+		<Property Id="MIKZFIX_START_AT_LOGIN" Secure="yes"></Property>
+		<!-- 1 when MIKZFIX_START_AT_LOGIN must be written (new install, or passed on the command line). -->
+		<Property Id="MIKZFIX_START_AT_LOGIN_SET" Secure="yes"></Property>
+
+		<SetProperty Action="MikzfixPropStartAtLoginSet" Id="MIKZFIX_START_AT_LOGIN_SET" Value="1" After="AppSearch" Sequence="first" Condition="MIKZFIX_START_AT_LOGIN OR (NOT Installed AND NOT WIX_UPGRADE_DETECTED)" />
+		<SetProperty Action="MikzfixPropStartAtLoginDefault" Id="MIKZFIX_START_AT_LOGIN" Value="1" After="MikzfixPropStartAtLoginSet" Sequence="first" Condition="NOT MIKZFIX_START_AT_LOGIN AND NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+		<SetProperty Action="MikzfixPropUnattendedDefault" Id="MIKZFIX_UNATTENDED" Value="1" After="AppSearch" Sequence="first" Condition="NOT MIKZFIX_UNATTENDED AND NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+		<!-- A check box is checked for any non-empty value, so "0"/"N" from the command line become empty. -->
+		<SetProperty Action="MikzfixPropUnattendedOff" Id="MIKZFIX_UNATTENDED" Value="" After="MikzfixPropUnattendedDefault" Sequence="first" Condition="MIKZFIX_UNATTENDED AND NOT (MIKZFIX_UNATTENDED = 1 OR MIKZFIX_UNATTENDED = &quot;Y&quot; OR MIKZFIX_UNATTENDED = &quot;y&quot;)" />
+		<SetProperty Action="MikzfixPropStartAtLoginOff" Id="MIKZFIX_START_AT_LOGIN" Value="" After="MikzfixPropStartAtLoginDefault" Sequence="first" Condition="MIKZFIX_START_AT_LOGIN AND NOT (MIKZFIX_START_AT_LOGIN = 1 OR MIKZFIX_START_AT_LOGIN = &quot;Y&quot; OR MIKZFIX_START_AT_LOGIN = &quot;y&quot;)" />
+		<!-- Start at login off: do not create the tray Startup shortcut either (the service would remove it). -->
+		<SetProperty Action="MikzfixPropNoStartupShortcut" Id="STARTUPSHORTCUTS" Value="" Before="CostFinalize" Sequence="execute" Condition="MIKZFIX_START_AT_LOGIN_SET AND NOT (MIKZFIX_START_AT_LOGIN = 1 OR MIKZFIX_START_AT_LOGIN = &quot;Y&quot; OR MIKZFIX_START_AT_LOGIN = &quot;y&quot;)" />
+
 	</Fragment>
 </Wix>

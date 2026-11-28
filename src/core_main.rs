@@ -334,6 +334,12 @@ pub fn core_main() -> Option<Vec<String>> {
                     log::info!("Remote printer uninstalled");
                 }
                 return None;
+            } else if args[0] == "--mikzfix-install-option" {
+                // mikzfix: run by the MSI (deferred, as SYSTEM, before it starts the service) to
+                // put the installer choices in the service Config. `--option` is blocked in our
+                // build by is_cli_setting_change_disabled().
+                mikzfix_install_option(&args[1..]);
+                return None;
             }
         }
         #[cfg(target_os = "macos")]
@@ -909,6 +915,43 @@ fn try_send_by_dbus(uni_links: String) -> Option<Vec<String>> {
             return Some(Vec::new());
         }
     }
+}
+
+/// mikzfix: `--mikzfix-install-option <key> <value>`, only for our installer keys and values.
+#[cfg(windows)]
+fn mikzfix_install_option(args: &[String]) {
+    const ALLOWED: [(&str, &[&str]); 2] = [
+        (config::keys::OPTION_MIKZFIX_UNATTENDED, &["Y", "N"]),
+        (
+            crate::hbbs_http::mikzfix_enroll::OPTION_START_AT_LOGIN,
+            &["Y", "N"],
+        ),
+    ];
+    let [key, value] = args else {
+        log::error!("mikzfix-install-option: expected <key> <value>");
+        return;
+    };
+    let allowed = ALLOWED
+        .iter()
+        .any(|(k, vs)| *k == key.as_str() && vs.contains(&value.as_str()));
+    if !allowed {
+        log::error!("mikzfix-install-option: refused {}={}", key, value);
+        return;
+    }
+    if !(crate::platform::is_installed() && is_root()) {
+        log::error!("mikzfix-install-option: installation and admin rights required");
+        return;
+    }
+    if crate::platform::is_self_service_running() {
+        crate::ipc::set_option(key, value);
+    } else if crate::platform::is_root() {
+        // SYSTEM: this is the service Config (ServiceProfiles\LocalService).
+        config::Config::set_option(key.to_owned(), value.to_owned());
+    } else {
+        log::error!("mikzfix-install-option: the service is not running and this is not SYSTEM");
+        return;
+    }
+    log::info!("mikzfix-install-option {}={}", key, value);
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
