@@ -94,7 +94,10 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
 
   @override
   Widget build(BuildContext context) {
-    final tabWidget = Stack(children: [
+    // StackFit.expand: on Windows/Linux DragToResizeArea hands down loose constraints, and a
+    // loose Stack sizes itself to its only non-positioned child (the 0x0 SizedBox.shrink
+    // below), which left the whole main window blank.
+    final tabWidget = Stack(fit: StackFit.expand, children: [
       Positioned.fill(child: _tabContent(context)),
       // mikzfix: blocks the whole main window while the macOS permissions window is required.
       Obx(() => mikzfixPermBlocked.value
