@@ -6,6 +6,7 @@ import 'package:draggable_float_widget/draggable_float_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
+import 'package:flutter_hbb/desktop/widgets/mikzfix_cm_dock.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/mobile/pages/home_page.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
@@ -294,28 +295,33 @@ class ChatModel with ChangeNotifier {
   toggleCMSidePage() async {
     if (_togglingCMSidePage) return false;
     _togglingCMSidePage = true;
-    if (_isShowCMSidePage) {
-      _isShowCMSidePage = !_isShowCMSidePage;
-      notifyListeners();
-      await windowManager.show();
-      await windowManager.setSizeAlignment(
-          kConnectionManagerWindowSizeClosedChat, Alignment.topRight);
-    } else {
-      final currentSelectedTab =
-          gFFI.serverModel.tabController.state.value.selectedTabInfo;
-      final client = parent.target?.serverModel.clients.firstWhereOrNull(
-          (client) => client.id.toString() == currentSelectedTab.key);
-      if (client != null) {
-        client.unreadChatMessageCount.value = 0;
+    // mikzfix: the side page widens the docked panel to the left (MikzfixCmDock), and
+    // opening it also expands a collapsed panel. The panel only shows the side page once
+    // the window is wide enough, so the flag can flip before the resize.
+    try {
+      if (_isShowCMSidePage) {
+        _isShowCMSidePage = !_isShowCMSidePage;
+        notifyListeners();
+        await windowManager.show();
+        await MikzfixCmDock.apply();
+      } else {
+        final currentSelectedTab =
+            gFFI.serverModel.tabController.state.value.selectedTabInfo;
+        final client = parent.target?.serverModel.clients.firstWhereOrNull(
+            (client) => client.id.toString() == currentSelectedTab.key);
+        if (client != null) {
+          client.unreadChatMessageCount.value = 0;
+        }
+        await windowManager.show();
+        _isShowCMSidePage = !_isShowCMSidePage;
+        MikzfixCmDock.collapsed.value = false;
+        notifyListeners();
+        await MikzfixCmDock.apply();
+        requestChatInputFocus();
       }
-      requestChatInputFocus();
-      await windowManager.show();
-      await windowManager.setSizeAlignment(
-          kConnectionManagerWindowSizeOpenChat, Alignment.topRight);
-      _isShowCMSidePage = !_isShowCMSidePage;
-      notifyListeners();
+    } finally {
+      _togglingCMSidePage = false;
     }
-    _togglingCMSidePage = false;
   }
 
   changeCurrentKey(MessageKey key) {

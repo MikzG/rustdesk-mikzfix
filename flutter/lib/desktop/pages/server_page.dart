@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/desktop/widgets/mikzfix_cm_dock.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
@@ -172,97 +173,180 @@ class ConnectionManagerState extends State<ConnectionManager>
       }
     }
 
-    return serverModel.clients.isEmpty
-        ? Column(
-            children: [
-              buildTitleBar(),
-              Expanded(
-                child: Center(
-                  child: Text(translate("Waiting")),
+    // mikzfix: a new request, voice call or ended session brings the collapsed panel back.
+    MikzfixCmDock.watchAttention(serverModel.clients);
+    if (serverModel.clients.isEmpty) {
+      return Column(
+        children: [
+          buildTitleBar(),
+          Expanded(
+            child: Center(
+              child: Text(translate("Waiting")),
+            ),
+          ),
+        ],
+      );
+    }
+    // mikzfix: TeamViewer-style panel docked to the screen edge (see mikzfix_cm_dock.dart)
+    // instead of upstream's DesktopTab window. Multiple connections are a row of chips under
+    // the header; the pages are the same TabInfo pages, kept alive in an IndexedStack.
+    return Listener(
+      onPointerDown: pointerHandler,
+      onPointerMove: pointerHandler,
+      child: Obx(() {
+        // Read the observables here, not inside LayoutBuilder (which runs at layout time).
+        final collapsed = MikzfixCmDock.collapsed.value;
+        final tabState = serverModel.tabController.state.value;
+        final tabs = tabState.tabs.toList();
+        final selected = tabState.selected;
+        return LayoutBuilder(builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          // While the window is being resized between states it can briefly have the other
+          // state's size; the tab fits anything, the panel needs room.
+          if (collapsed || size.width < 200 || size.height < 300) {
+            return SizedBox(
+              width: size.width,
+              height: size.height,
+              child: const MikzfixCmEdgeTab(),
+            );
+          }
+          return _buildDockedPanel(size, tabs, selected, serverModel);
+        });
+      }),
+    );
+  }
+
+  Widget _buildDockedPanel(Size size, List<TabInfo> tabs, int selected,
+      ServerModel serverModel) {
+    final showSide = gFFI.chatModel.isShowCMSidePage &&
+        size.width >= kMikzfixCmPanelWidth + 200;
+    final panelWidth = showSide ? kMikzfixCmPanelWidth : size.width;
+    final int index =
+        tabs.isEmpty ? 0 : selected.clamp(0, tabs.length - 1).toInt();
+    Widget panel = Theme(
+      // The panel is always the light brand card, also with the dark app theme.
+      data: MyTheme.lightTheme,
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const MikzfixCmHeaderBar(),
+            if (tabs.length > 1) _buildClientSwitcher(tabs, index, serverModel),
+            Expanded(
+              child: tabs.isEmpty
+                  ? const SizedBox.shrink()
+                  : IndexedStack(
+                      index: index,
+                      sizing: StackFit.expand,
+                      children: tabs
+                          .map((t) =>
+                              KeyedSubtree(key: ValueKey(t.key), child: t.page))
+                          .toList(),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!allowRemoteCMModification()) {
+      panel = buildRemoteBlock(
+        child: _buildKeyEventBlock(panel),
+        block: _controlPageBlock,
+        mask: false,
+      );
+    }
+    return SizedBox(
+      width: size.width,
+      height: size.height,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showSide)
+            Expanded(
+              child: Container(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: Consumer<ChatModel>(
+                  builder: (_, model, child) => allowRemoteCMModification()
+                      ? buildSidePage()
+                      : buildRemoteBlock(
+                          child: buildSidePage(),
+                          block: _sidePageBlock,
+                          mask: true),
                 ),
               ),
-            ],
-          )
-        : Listener(
-            onPointerDown: pointerHandler,
-            onPointerMove: pointerHandler,
-            child: DesktopTab(
-              showTitle: false,
-              showMaximize: false,
-              showMinimize: true,
-              showClose: true,
-              onWindowCloseButton: handleWindowCloseButton,
-              controller: serverModel.tabController,
-              selectedBorderColor: MyTheme.accent,
-              maxLabelWidth: 100,
-              tail: null, //buildScrollJumper(),
-              tabBuilder: (key, icon, label, themeConf) {
-                final client = serverModel.clients
-                    .firstWhereOrNull((client) => client.id.toString() == key);
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            ),
+          if (showSide)
+            const VerticalDivider(
+                width: 1, thickness: 1, color: MikzfixCmColors.divider),
+          SizedBox(width: panelWidth, child: panel),
+        ],
+      ),
+    );
+  }
+
+  /// mikzfix: one chip per connection when there is more than one.
+  Widget _buildClientSwitcher(
+      List<TabInfo> tabs, int selected, ServerModel serverModel) {
+    return Container(
+      height: 44,
+      color: MikzfixCmColors.secondaryBg,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        itemCount: tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (context, i) {
+          final tab = tabs[i];
+          final client = serverModel.clients
+              .firstWhereOrNull((c) => c.id.toString() == tab.key);
+          final isSelected = i == selected;
+          final label = client == null
+              ? tab.label
+              : (client.name.isNotEmpty ? client.name : client.peerId);
+          return Material(
+            color: isSelected ? MikzfixCmColors.brand : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+              side: BorderSide(
+                  color: isSelected
+                      ? MikzfixCmColors.brand
+                      : MikzfixCmColors.secondaryBorder),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(15),
+              onTap: () => serverModel.tabController.jumpTo(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Tooltip(
-                        message: key,
-                        waitDuration: Duration(seconds: 1),
-                        child: label),
-                    unreadMessageCountBuilder(client?.unreadChatMessageCount)
-                        .marginOnly(left: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 110),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : MikzfixCmColors.brand,
+                        ),
+                      ),
+                    ),
+                    if (client != null)
+                      unreadMessageCountBuilder(client.unreadChatMessageCount)
+                          .marginOnly(left: 4),
                   ],
-                );
-              },
-              pageViewBuilder: (pageView) => LayoutBuilder(
-                builder: (context, constrains) {
-                  var borderWidth = 0.0;
-                  if (constrains.maxWidth >
-                      kConnectionManagerWindowSizeClosedChat.width) {
-                    borderWidth = kConnectionManagerWindowSizeOpenChat.width -
-                        constrains.maxWidth;
-                  } else {
-                    borderWidth = kConnectionManagerWindowSizeClosedChat.width -
-                        constrains.maxWidth;
-                  }
-                  if (borderWidth < 0 || borderWidth > 50) {
-                    borderWidth = 0;
-                  }
-                  final realClosedWidth =
-                      kConnectionManagerWindowSizeClosedChat.width -
-                          borderWidth;
-                  final realChatPageWidth =
-                      constrains.maxWidth - realClosedWidth;
-                  final row = Row(children: [
-                    if (constrains.maxWidth >
-                        kConnectionManagerWindowSizeClosedChat.width)
-                      Consumer<ChatModel>(
-                          builder: (_, model, child) => SizedBox(
-                                width: realChatPageWidth,
-                                child: allowRemoteCMModification()
-                                    ? buildSidePage()
-                                    : buildRemoteBlock(
-                                        child: buildSidePage(),
-                                        block: _sidePageBlock,
-                                        mask: true),
-                              )),
-                    SizedBox(
-                        width: realClosedWidth,
-                        child: SizedBox(
-                            width: realClosedWidth,
-                            child: allowRemoteCMModification()
-                                ? pageView
-                                : buildRemoteBlock(
-                                    child: _buildKeyEventBlock(pageView),
-                                    block: _controlPageBlock,
-                                    mask: false,
-                                  ))),
-                  ]);
-                  return Container(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    child: row,
-                  );
-                },
+                ),
               ),
             ),
           );
+        },
+      ),
+    );
   }
 
   Widget buildSidePage() {
@@ -347,27 +431,61 @@ class ConnectionManagerState extends State<ConnectionManager>
 
 Widget buildConnectionCard(Client client) {
   return Consumer<ServerModel>(
-    builder: (context, value, child) => Column(
-      mainAxisAlignment: MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      key: ValueKey(client.id),
-      children: [
-        _CmHeader(client: client),
-        client.type_() == ClientType.file ||
-                client.type_() == ClientType.portForward ||
-                client.type_() == ClientType.terminal ||
-                client.disconnected
-            ? Offstage()
-            : _PrivilegeBoard(client: client),
-        Expanded(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: _CmControlPanel(client: client),
-          ),
-        )
-      ],
-    ).paddingSymmetric(vertical: 4.0, horizontal: 8.0),
+    builder: (context, value, child) =>
+        _MikzfixConnectionCard(key: ValueKey(client.id), client: client),
   );
+}
+
+/// mikzfix: one connection in the docked panel: status on top, permissions in the middle
+/// (scrolls if needed), actions at the bottom with "Terminar sessão" last and largest.
+class _MikzfixConnectionCard extends StatefulWidget {
+  final Client client;
+  const _MikzfixConnectionCard({Key? key, required this.client})
+      : super(key: key);
+
+  @override
+  State<_MikzfixConnectionCard> createState() => _MikzfixConnectionCardState();
+}
+
+class _MikzfixConnectionCardState extends State<_MikzfixConnectionCard>
+    with AutomaticKeepAliveClientMixin {
+  bool _moreOptions = false;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final client = widget.client;
+    final showPrivileges = !(client.type_() == ClientType.file ||
+        client.type_() == ClientType.portForward ||
+        client.type_() == ClientType.terminal ||
+        client.disconnected);
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _CmHeader(client: client),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: showPrivileges
+                  ? _PrivilegeBoard(
+                      client: client,
+                      showMore: _moreOptions,
+                      onToggleMore: () =>
+                          setState(() => _moreOptions = !_moreOptions),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ),
+          _CmControlPanel(client: client),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _AppIcon extends StatelessWidget {
@@ -440,125 +558,78 @@ class _CmHeaderState extends State<_CmHeader>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10.0),
-        gradient: LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [
-            Color(0xff00bfe1),
-            Color(0xff0071ff),
-          ],
-        ),
-      ),
-      margin: EdgeInsets.symmetric(horizontal: 5.0, vertical: 10.0),
-      padding: EdgeInsets.only(
-        top: 10.0,
-        bottom: 10.0,
-        left: 10.0,
-        right: 5.0,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    // mikzfix: status block of the docked panel. Who is connected, in plain words, and the
+    // session timer. (Upstream: gradient card with avatar, name and ID, chat button.)
+    final name = client.name.isNotEmpty ? client.name : client.peerId;
+    final String status;
+    final Color statusColor;
+    final Color dotColor;
+    final String title;
+    if (!client.authorized) {
+      status = translate('mikzfix_cm_session_request');
+      statusColor = MikzfixCmColors.pending;
+      dotColor = MikzfixCmColors.pendingDot;
+      title = translate('mikzfix_cm_requesting').replaceAll('{}', name);
+    } else if (client.disconnected) {
+      status = translate('mikzfix_cm_session_ended');
+      statusColor = MikzfixCmColors.ended;
+      dotColor = MikzfixCmColors.ended;
+      title = translate('mikzfix_cm_disconnected').replaceAll('{}', name);
+    } else {
+      status = translate('mikzfix_cm_session_active');
+      statusColor = MikzfixCmColors.active;
+      dotColor = MikzfixCmColors.activeDot;
+      title = translate('mikzfix_cm_connected').replaceAll('{}', name);
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildClientAvatar().marginOnly(right: 10.0),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                    child: Text(
-                  client.name,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          Row(
+            children: [
+              MikzfixCmStatusDot(color: dotColor, size: 8),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  status,
                   maxLines: 1,
-                )),
-                FittedBox(
-                  child: Text(
-                    "(${client.peerId})",
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (client.type_() == ClientType.terminal)
-                  FittedBox(
-                    child: Text(
-                      translate("Terminal"),
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              if (client.authorized && !client.disconnected)
+                Obx(
+                  () => Text(
+                    formatDurationToTime(Duration(seconds: _time.value)),
+                    style: const TextStyle(
+                      color: MikzfixCmColors.title,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
-                if (client.type_() == ClientType.file)
-                  FittedBox(
-                    child: Text(
-                      translate("Transfer file"),
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ),
-                if (client.type_() == ClientType.camera)
-                  FittedBox(
-                    child: Text(
-                      translate("View camera"),
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ),
-                if (client.portForward.isNotEmpty)
-                  FittedBox(
-                    child: Text(
-                      "Port Forward: ${client.portForward}",
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ),
-                SizedBox(height: 10.0),
-                FittedBox(
-                    child: Row(
-                  children: [
-                    Text(
-                      client.authorized
-                          ? client.disconnected
-                              ? translate("Disconnected")
-                              : translate("Connected")
-                          : "${translate("Request access to your device")}...",
-                      style: TextStyle(color: Colors.white),
-                    ).marginOnly(right: 8.0),
-                    if (client.authorized)
-                      Obx(
-                        () => Text(
-                          formatDurationToTime(
-                            Duration(seconds: _time.value),
-                          ),
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      )
-                  ],
-                ))
-              ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: MikzfixCmColors.title,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
             ),
           ),
-          Offstage(
-            offstage: !client.authorized ||
-                (client.type_() != ClientType.remote &&
-                    client.type_() != ClientType.file &&
-                    client.type_() != ClientType.camera),
-            child: IconButton(
-              onPressed: () => checkClickTime(client.id, () {
-                if (client.type_() == ClientType.file) {
-                  gFFI.chatModel.toggleCMFilePage();
-                } else {
-                  gFFI.chatModel
-                      .toggleCMChatPage(MessageKey(client.peerId, client.id));
-                }
-              }),
-              icon: SvgPicture.asset(client.type_() == ClientType.file
-                  ? 'assets/file_transfer.svg'
-                  : 'assets/chat2.svg'),
-              splashRadius: kDesktopIconButtonSplashRadius,
-            ),
-          )
+          const SizedBox(height: 14),
+          const Divider(height: 1, thickness: 1, color: MikzfixCmColors.divider),
         ],
       ),
     );
@@ -566,42 +637,29 @@ class _CmHeaderState extends State<_CmHeader>
 
   @override
   bool get wantKeepAlive => true;
+}
 
-  Widget _buildClientAvatar() {
-    return buildAvatarWidget(
-          avatar: client.avatar,
-          size: 70,
-          borderRadius: 15,
-          fallback: _buildInitialAvatar(),
-        ) ??
-        _buildInitialAvatar();
-  }
-
-  Widget _buildInitialAvatar() {
-    return Container(
-      width: 70,
-      height: 70,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: str2color(client.name),
-        borderRadius: BorderRadius.circular(15.0),
-      ),
-      child: Text(
-        client.name.isNotEmpty ? client.name[0] : '?',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-          fontSize: 55,
-        ),
-      ),
-    );
-  }
+/// mikzfix: one permission toggle of the panel.
+class _MikzfixPerm {
+  final String name; // cmSwitchPermission name
+  final bool enabled;
+  final IconData icon;
+  final String label;
+  final void Function(bool) set;
+  const _MikzfixPerm(this.name, this.enabled, this.icon, this.label, this.set);
 }
 
 class _PrivilegeBoard extends StatefulWidget {
   final Client client;
+  final bool showMore;
+  final VoidCallback onToggleMore;
 
-  const _PrivilegeBoard({Key? key, required this.client}) : super(key: key);
+  const _PrivilegeBoard(
+      {Key? key,
+      required this.client,
+      required this.showMore,
+      required this.onToggleMore})
+      : super(key: key);
 
   @override
   State<StatefulWidget> createState() => _PrivilegeBoardState();
@@ -609,246 +667,179 @@ class _PrivilegeBoard extends StatefulWidget {
 
 class _PrivilegeBoardState extends State<_PrivilegeBoard> {
   late final client = widget.client;
-  Widget buildPermissionIcon(bool enabled, IconData iconData,
-      Function(bool)? onTap, String tooltipText,
-      {required bool canModify}) {
+
+  void _switch(_MikzfixPerm p, bool enabled) {
+    bind.cmSwitchPermission(connId: client.id, name: p.name, enabled: enabled);
+    setState(() => p.set(enabled));
+  }
+
+  /// mikzfix: 40 px toggle with our own hover tip ("Ficheiros: permitido") above it.
+  Widget _buildToggle(_MikzfixPerm p, {required bool canModify}) {
+    final state = translate(p.enabled ? 'mikzfix_cm_allowed' : 'mikzfix_cm_blocked');
+    final bg = p.enabled ? MikzfixCmColors.permOnBg : MikzfixCmColors.permOffBg;
+    final fg = p.enabled ? MikzfixCmColors.permOnFg : MikzfixCmColors.permOffFg;
+    final border =
+        p.enabled ? MikzfixCmColors.permOnBorder : MikzfixCmColors.permOffBorder;
     return Tooltip(
-      message: "$tooltipText: ${enabled ? "ON" : "OFF"}",
-      waitDuration: Duration.zero,
-      child: Container(
-        decoration: BoxDecoration(
-          color: enabled
-              ? (canModify ? MyTheme.accent : MyTheme.accent.withOpacity(0.6))
-              : Colors.grey[700],
-          borderRadius: BorderRadius.circular(10.0),
-        ),
-        padding: EdgeInsets.all(8.0),
-        child: InkWell(
-          onTap: canModify
-              ? () =>
-                  checkClickTime(widget.client.id, () => onTap?.call(!enabled))
-              : null,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Expanded(
-                child: Icon(
-                  iconData,
-                  color: Colors.white,
-                ),
+      message: '${p.label}: $state',
+      preferBelow: false,
+      verticalOffset: 26,
+      waitDuration: const Duration(milliseconds: 300),
+      excludeFromSemantics: true,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: MikzfixCmColors.title,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+      child: Semantics(
+        button: true,
+        toggled: p.enabled,
+        label: p.label,
+        child: Opacity(
+          opacity: canModify ? 1.0 : 0.6,
+          child: Material(
+            color: bg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(9),
+              side: BorderSide(color: border),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(9),
+              onTap: canModify
+                  ? () => checkClickTime(client.id, () => _switch(p, !p.enabled))
+                  : null,
+              child: SizedBox(
+                height: 40,
+                child: Center(child: Icon(p.icon, color: fg, size: 20)),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildRow(List<_MikzfixPerm> perms, {required bool canModify}) {
+    final children = <Widget>[];
+    for (var i = 0; i < perms.length; i++) {
+      if (i > 0) children.add(const SizedBox(width: 8));
+      children.add(
+          Expanded(child: _buildToggle(perms[i], canModify: canModify)));
+    }
+    return Row(children: children);
   }
 
   @override
   Widget build(BuildContext context) {
-    final crossAxisCount = 4;
-    final spacing = 10.0;
     final canModifyPermission =
         bind.mainGetBuildinOption(key: kOptionEnablePermChangeInAcceptWindow) !=
             'N';
-    return Container(
-      width: double.infinity,
-      height: 160.0,
-      margin: EdgeInsets.all(5.0),
-      padding: EdgeInsets.all(5.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10.0),
-        color: Theme.of(context).colorScheme.background,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 1,
-            offset: Offset(0, 1.5),
+    final isCamera = client.type_() == ClientType.camera;
+    final audio = _MikzfixPerm('audio', client.audio, Icons.volume_up_rounded,
+        translate('mikzfix_cm_perm_audio'), (v) => client.audio = v);
+    final recording = _MikzfixPerm(
+        'recording',
+        client.recording,
+        Icons.videocam_rounded,
+        translate('mikzfix_cm_perm_recording'),
+        (v) => client.recording = v);
+    // The main four (upstream has no "screen" permission to toggle).
+    final List<_MikzfixPerm> primary = isCamera
+        ? [audio, recording]
+        : [
+            _MikzfixPerm('keyboard', client.keyboard, Icons.mouse_rounded,
+                translate('mikzfix_cm_perm_keyboard'), (v) => client.keyboard = v),
+            _MikzfixPerm('file', client.file, Icons.folder_rounded,
+                translate('mikzfix_cm_perm_file'), (v) => client.file = v),
+            audio,
+            _MikzfixPerm(
+                'clipboard',
+                client.clipboard,
+                Icons.content_paste_rounded,
+                translate('mikzfix_cm_perm_clipboard'),
+                (v) => client.clipboard = v),
+          ];
+    // The rest of upstream's toggles, behind "Mais opções".
+    final List<_MikzfixPerm> more = isCamera
+        ? []
+        : [
+            _MikzfixPerm('restart', client.restart, Icons.restart_alt_rounded,
+                translate('mikzfix_cm_perm_restart'), (v) => client.restart = v),
+            recording,
+            // only windows support block input
+            if (isWindows)
+              _MikzfixPerm(
+                  'block_input',
+                  client.blockInput,
+                  Icons.block,
+                  translate('mikzfix_cm_perm_block_input'),
+                  (v) => client.blockInput = v),
+            if (bind.mainSupportedPrivacyModeImpls() != '[]')
+              _MikzfixPerm(
+                  'privacy_mode',
+                  client.privacyMode,
+                  Icons.visibility_off,
+                  translate('mikzfix_cm_perm_privacy'),
+                  (v) => client.privacyMode = v),
+          ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          translate('mikzfix_cm_permissions').toUpperCase(),
+          style: const TextStyle(
+            color: MikzfixCmColors.muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            translate("Permissions"),
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ).marginOnly(left: 4.0, bottom: 8.0),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: crossAxisCount,
-              padding: EdgeInsets.symmetric(horizontal: spacing),
-              mainAxisSpacing: spacing,
-              crossAxisSpacing: spacing,
-              children: client.type_() == ClientType.camera
-                  ? [
-                      buildPermissionIcon(
-                        client.audio,
-                        Icons.volume_up_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "audio",
-                              enabled: enabled);
-                          setState(() {
-                            client.audio = enabled;
-                          });
-                        },
-                        translate('Enable audio'),
-                        canModify: canModifyPermission,
+        ),
+        const SizedBox(height: 8),
+        _buildRow(primary, canModify: canModifyPermission),
+        if (more.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: widget.onToggleMore,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      translate(widget.showMore
+                          ? 'mikzfix_cm_fewer_options'
+                          : 'mikzfix_cm_more_options'),
+                      style: const TextStyle(
+                        color: MikzfixCmColors.brand,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
-                      buildPermissionIcon(
-                        client.recording,
-                        Icons.videocam_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "recording",
-                              enabled: enabled);
-                          setState(() {
-                            client.recording = enabled;
-                          });
-                        },
-                        translate('Enable recording session'),
-                        canModify: canModifyPermission,
-                      ),
-                    ]
-                  : [
-                      buildPermissionIcon(
-                        client.keyboard,
-                        Icons.keyboard,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "keyboard",
-                              enabled: enabled);
-                          setState(() {
-                            client.keyboard = enabled;
-                          });
-                        },
-                        translate('Enable keyboard/mouse'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.clipboard,
-                        Icons.assignment_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "clipboard",
-                              enabled: enabled);
-                          setState(() {
-                            client.clipboard = enabled;
-                          });
-                        },
-                        translate('Enable clipboard'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.audio,
-                        Icons.volume_up_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "audio",
-                              enabled: enabled);
-                          setState(() {
-                            client.audio = enabled;
-                          });
-                        },
-                        translate('Enable audio'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.file,
-                        Icons.upload_file_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "file",
-                              enabled: enabled);
-                          setState(() {
-                            client.file = enabled;
-                          });
-                        },
-                        translate('Enable file copy and paste'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.restart,
-                        Icons.restart_alt_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "restart",
-                              enabled: enabled);
-                          setState(() {
-                            client.restart = enabled;
-                          });
-                        },
-                        translate('Enable remote restart'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.recording,
-                        Icons.videocam_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "recording",
-                              enabled: enabled);
-                          setState(() {
-                            client.recording = enabled;
-                          });
-                        },
-                        translate('Enable recording session'),
-                        canModify: canModifyPermission,
-                      ),
-                      // only windows support block input
-                      if (isWindows)
-                        buildPermissionIcon(
-                          client.blockInput,
-                          Icons.block,
-                          (enabled) {
-                            bind.cmSwitchPermission(
-                                connId: client.id,
-                                name: "block_input",
-                                enabled: enabled);
-                            setState(() {
-                              client.blockInput = enabled;
-                            });
-                          },
-                          translate('Enable blocking user input'),
-                          canModify: canModifyPermission,
-                        ),
-                      if (bind.mainSupportedPrivacyModeImpls() != '[]')
-                        buildPermissionIcon(
-                          client.privacyMode,
-                          Icons.visibility_off,
-                          (enabled) {
-                            bind.cmSwitchPermission(
-                                connId: client.id,
-                                name: "privacy_mode",
-                                enabled: enabled);
-                            setState(() {
-                              client.privacyMode = enabled;
-                            });
-                          },
-                          translate('Enable privacy mode'),
-                          canModify: canModifyPermission,
-                        )
-                    ],
+                    ),
+                    Icon(
+                      widget.showMore
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: MikzfixCmColors.brand,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+          if (widget.showMore) ...[
+            const SizedBox(height: 8),
+            _buildRow(more, canModify: canModifyPermission),
+          ],
         ],
-      ),
+      ],
     );
   }
 }
-
-const double buttonBottomMargin = 8;
 
 class _CmControlPanel extends StatelessWidget {
   final Client client;
@@ -857,12 +848,28 @@ class _CmControlPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return client.authorized
-        ? client.disconnected
-            ? buildDisconnected(context)
-            : buildAuthorized(context)
-        : buildUnAuthorized(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          client.authorized
+              ? client.disconnected
+                  ? buildDisconnected(context)
+                  : buildAuthorized(context)
+              : buildUnAuthorized(context),
+          // mikzfix: the same "Made by MikzBots" credit as the home page (opens mikzbots.dev).
+          const Center(child: MikzBotsCredit()).marginOnly(top: 6),
+        ],
+      ),
+    );
   }
+
+  bool get _hasSidePage =>
+      client.type_() == ClientType.remote ||
+      client.type_() == ClientType.file ||
+      client.type_() == ClientType.camera;
 
   buildAuthorized(BuildContext context) {
     final bool canElevate = bind.cmCanElevate();
@@ -870,12 +877,13 @@ class _CmControlPanel extends StatelessWidget {
     final showElevation = canElevate &&
         model.showElevation &&
         client.type_() == ClientType.remote;
+    final isFile = client.type_() == ClientType.file;
     return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Offstage(
-          offstage: !client.inVoiceCall,
-          child: Row(
+        if (client.inVoiceCall)
+          Row(
             children: [
               Expanded(
                 child: buildButton(context,
@@ -924,10 +932,7 @@ class _CmControlPanel extends StatelessWidget {
                                     maxLines: 1,
                                   ),
                                   constraints: BoxConstraints(
-                                      maxWidth:
-                                          kConnectionManagerWindowSizeClosedChat
-                                                  .width -
-                                              80),
+                                      maxWidth: kMikzfixCmPanelWidth - 80),
                                 ),
                               )),
                             ))
@@ -937,20 +942,21 @@ class _CmControlPanel extends StatelessWidget {
                     icon: Icon(
                       Icons.call_rounded,
                       color: Colors.white,
-                      size: 14,
+                      size: 16,
                     ),
                     text: "Audio input",
                     textColor: Colors.white),
               ),
+              const SizedBox(width: 8),
               Expanded(
                 child: buildButton(
                   context,
-                  color: Colors.red,
+                  color: MikzfixCmColors.danger,
                   onClick: () => closeVoiceCall(),
                   icon: Icon(
                     Icons.call_end_rounded,
                     color: Colors.white,
-                    size: 14,
+                    size: 16,
                   ),
                   text: "Stop voice call",
                   textColor: Colors.white,
@@ -958,10 +964,8 @@ class _CmControlPanel extends StatelessWidget {
               )
             ],
           ),
-        ),
-        Offstage(
-          offstage: !client.incomingVoiceCall,
-          child: Row(
+        if (client.incomingVoiceCall)
+          Row(
             children: [
               Expanded(
                 child: buildButton(context,
@@ -970,20 +974,21 @@ class _CmControlPanel extends StatelessWidget {
                     icon: Icon(
                       Icons.call_rounded,
                       color: Colors.white,
-                      size: 14,
+                      size: 16,
                     ),
                     text: "Accept",
                     textColor: Colors.white),
               ),
+              const SizedBox(width: 8),
               Expanded(
                 child: buildButton(
                   context,
-                  color: Colors.red,
+                  color: MikzfixCmColors.danger,
                   onClick: () => handleVoiceCall(false),
                   icon: Icon(
                     Icons.phone_disabled_rounded,
                     color: Colors.white,
-                    size: 14,
+                    size: 16,
                   ),
                   text: "Dismiss",
                   textColor: Colors.white,
@@ -991,66 +996,83 @@ class _CmControlPanel extends StatelessWidget {
               )
             ],
           ),
-        ),
-        Offstage(
-          offstage: !client.fromSwitch,
-          child: buildButton(context,
+        if (client.fromSwitch)
+          buildButton(context,
               color: Colors.purple,
               onClick: () => handleSwitchBack(context),
-              icon: Icon(Icons.reply, color: Colors.white),
+              icon: Icon(Icons.reply, color: Colors.white, size: 16),
               text: "Switch Sides",
               textColor: Colors.white),
-        ),
-        Offstage(
-          offstage: !showElevation,
-          child: buildButton(
+        if (showElevation)
+          buildButton(
             context,
             color: MyTheme.accent,
             onClick: () {
               handleElevate(context);
-              windowManager.minimize();
+              // mikzfix: collapse to the edge tab (upstream minimized; there is no
+              // taskbar entry to bring it back from).
+              MikzfixCmDock.collapse();
             },
             icon: Icon(
               Icons.security_rounded,
               color: Colors.white,
-              size: 14,
+              size: 16,
             ),
             text: 'Elevate',
             textColor: Colors.white,
           ),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: buildButton(context,
-                  color: Colors.redAccent,
-                  onClick: handleDisconnect,
-                  text: 'Disconnect',
-                  icon: Icon(
-                    Icons.link_off_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                  textColor: Colors.white),
+        if (_hasSidePage)
+          buildButton(
+            context,
+            color: MikzfixCmColors.secondaryBg,
+            border: Border.all(color: MikzfixCmColors.secondaryBorder),
+            height: 44,
+            onClick: () {
+              if (isFile) {
+                gFFI.chatModel.toggleCMFilePage();
+              } else {
+                gFFI.chatModel
+                    .toggleCMChatPage(MessageKey(client.peerId, client.id));
+              }
+            },
+            icon: Icon(
+              isFile ? Icons.swap_vert_rounded : Icons.chat_bubble_outline_rounded,
+              color: MikzfixCmColors.brand,
+              size: 18,
             ),
-          ],
-        )
+            text: isFile ? 'mikzfix_cm_transfers' : 'mikzfix_cm_chat',
+            textColor: MikzfixCmColors.brand,
+            fontWeight: FontWeight.w600,
+            trailing: unreadMessageCountBuilder(client.unreadChatMessageCount)
+                .marginOnly(left: 6),
+          ),
+        const SizedBox(height: 4),
+        buildButton(context,
+            color: MikzfixCmColors.danger,
+            height: 48,
+            onClick: handleDisconnect,
+            text: 'mikzfix_cm_end_session',
+            icon: Icon(
+              Icons.close_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            textColor: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.bold),
       ],
-    ).marginOnly(bottom: buttonBottomMargin);
+    );
   }
 
   buildDisconnected(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Expanded(
-            child: buildButton(context,
-                color: MyTheme.accent,
-                onClick: handleClose,
-                text: 'Close',
-                textColor: Colors.white)),
-      ],
-    ).marginOnly(bottom: buttonBottomMargin);
+    return buildButton(context,
+        color: MikzfixCmColors.brand,
+        height: 48,
+        onClick: handleClose,
+        text: 'Close',
+        textColor: Colors.white,
+        fontSize: 15,
+        fontWeight: FontWeight.bold);
   }
 
   buildUnAuthorized(BuildContext context) {
@@ -1061,58 +1083,51 @@ class _CmControlPanel extends StatelessWidget {
         client.type_() == ClientType.remote;
     final showAccept = model.approveMode != 'password';
     return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Offstage(
-          offstage: !showElevation || !showAccept,
-          child: buildButton(context, color: Colors.green[700], onClick: () {
+        if (showElevation && showAccept)
+          buildButton(context, color: Colors.green[700], onClick: () {
             handleAccept(context);
             handleElevate(context);
-            windowManager.minimize();
+            // mikzfix: collapse instead of minimize (no taskbar entry).
+            MikzfixCmDock.collapse();
           },
               text: 'Accept and Elevate',
               icon: Icon(
                 Icons.security_rounded,
                 color: Colors.white,
-                size: 14,
+                size: 16,
               ),
               textColor: Colors.white,
               tooltip: 'accept_and_elevate_btn_tooltip'),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (showAccept)
-              Expanded(
-                child: Column(
-                  children: [
-                    buildButton(
-                      context,
-                      color: MyTheme.accent,
-                      onClick: () {
-                        handleAccept(context);
-                        windowManager.minimize();
-                      },
-                      text: 'Accept',
-                      textColor: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: buildButton(
-                context,
-                color: Colors.transparent,
-                border: Border.all(color: Colors.grey),
-                onClick: handleDisconnect,
-                text: 'Cancel',
-                textColor: null,
-              ),
-            ),
-          ],
+        if (showAccept)
+          buildButton(
+            context,
+            color: MikzfixCmColors.brand,
+            height: 48,
+            onClick: () {
+              // mikzfix: upstream minimized here; the panel now collapses to its edge
+              // tab by itself after kMikzfixCmAutoCollapseDelay (see ServerModel._addTab).
+              handleAccept(context);
+            },
+            text: 'Accept',
+            textColor: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+        buildButton(
+          context,
+          color: MikzfixCmColors.secondaryBg,
+          border: Border.all(color: MikzfixCmColors.secondaryBorder),
+          height: 44,
+          onClick: handleDisconnect,
+          text: 'Cancel',
+          textColor: MikzfixCmColors.brand,
+          fontWeight: FontWeight.w600,
         ),
       ],
-    ).marginOnly(bottom: buttonBottomMargin);
+    );
   }
 
   Widget buildButton(BuildContext context,
@@ -1123,47 +1138,53 @@ class _CmControlPanel extends StatelessWidget {
       required String text,
       required Color? textColor,
       String? tooltip,
-      GestureTapDownCallback? onTapDown}) {
+      GestureTapDownCallback? onTapDown,
+      double height = 40,
+      double fontSize = 13,
+      FontWeight? fontWeight,
+      Widget? trailing}) {
     assert(!(onClick == null && onTapDown == null));
-    Widget textWidget;
-    if (icon != null) {
-      textWidget = Text(
-        translate(text),
-        style: TextStyle(color: textColor),
-        textAlign: TextAlign.center,
-      );
-    } else {
-      textWidget = Expanded(
-        child: Text(
-          translate(text),
-          style: TextStyle(color: textColor),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
     final borderRadius = BorderRadius.circular(10.0);
     final btn = Container(
-      height: 28,
+      height: height,
       decoration: BoxDecoration(
           color: color, borderRadius: borderRadius, border: border),
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: () {
-          if (onClick == null) return;
-          checkClickTime(client.id, onClick);
-        },
-        onTapDown: (details) {
-          if (onTapDown == null) return;
-          checkClickTime(client.id, () {
-            onTapDown.call(details);
-          });
-        },
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Offstage(offstage: icon == null, child: icon).marginOnly(right: 5),
-            textWidget,
-          ],
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: borderRadius,
+          onTap: () {
+            if (onClick == null) return;
+            checkClickTime(client.id, onClick);
+          },
+          onTapDown: (details) {
+            if (onTapDown == null) return;
+            checkClickTime(client.id, () {
+              onTapDown.call(details);
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (icon != null) icon.marginOnly(right: 8),
+                Flexible(
+                  child: Text(
+                    translate(text),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: textColor,
+                        fontSize: fontSize,
+                        fontWeight: fontWeight),
+                  ),
+                ),
+                if (trailing != null) trailing,
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1173,7 +1194,7 @@ class _CmControlPanel extends StatelessWidget {
                 child: btn,
               )
             : btn)
-        .marginAll(4);
+        .marginSymmetric(vertical: 4);
   }
 
   void handleDisconnect() {

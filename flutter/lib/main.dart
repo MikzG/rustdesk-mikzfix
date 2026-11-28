@@ -30,6 +30,7 @@ import 'mobile/pages/server_page.dart';
 import 'mobile/widgets/deploy_dialog.dart';
 import 'models/platform_model.dart';
 import 'desktop/widgets/mikzfix_mac_permissions.dart';
+import 'desktop/widgets/mikzfix_cm_dock.dart';
 
 import 'package:flutter_hbb/plugin/handlers.dart'
     if (dart.library.html) 'package:flutter_hbb/web/plugin/handlers.dart';
@@ -328,28 +329,37 @@ void runConnectionManagerScreen() async {
 bool _isCmReadyToShow = false;
 
 showCmWindow({bool isStartup = false}) async {
+  // mikzfix: the cm is a panel docked to the right edge of the primary display, always on
+  // top, without a taskbar entry on Windows (mikzfix_cm_dock.dart). Upstream: 300x490 at the
+  // top right, with a taskbar entry, minimized to the taskbar.
   if (isStartup) {
     WindowOptions windowOptions = getHiddenTitleBarWindowOptions(
-        size: kConnectionManagerWindowSizeClosedChat, alwaysOnTop: true);
+        size: const Size(kMikzfixCmPanelWidth, kMikzfixCmPanelHeight),
+        alwaysOnTop: true);
     await windowManager.waitUntilReadyToShow(windowOptions, null);
     bind.mainHideDock();
+    await MikzfixCmDock.prepareWindow();
+    await MikzfixCmDock.apply();
     await Future.wait([
       windowManager.show(),
       windowManager.focus(),
       windowManager.setOpacity(1)
     ]);
-    // ensure initial window size to be changed
-    await windowManager.setSizeAlignment(
-        kConnectionManagerWindowSizeClosedChat, Alignment.topRight);
+    // Again after show: Windows restores the taskbar button on show, and the size may have
+    // changed with the DPI of the display the window was created on.
+    await MikzfixCmDock.apply();
     _isCmReadyToShow = true;
   } else if (_isCmReadyToShow) {
     if (await windowManager.getOpacity() != 1) {
       await windowManager.setOpacity(1);
+      await windowManager.show();
+      // No minimize/restore trick here: a minimized window without a taskbar entry could
+      // not be brought back by the customer.
+      if (await windowManager.isMinimized()) {
+        await windowManager.restore();
+      }
+      await MikzfixCmDock.apply();
       await windowManager.focus();
-      await windowManager.minimize(); //needed
-      await windowManager.setSizeAlignment(
-          kConnectionManagerWindowSizeClosedChat, Alignment.topRight);
-      windowOnTop(null);
     }
   }
 }
@@ -361,6 +371,8 @@ hideCmWindow({bool isStartup = false}) async {
     windowManager.setOpacity(0);
     await windowManager.waitUntilReadyToShow(windowOptions, null);
     bind.mainHideDock();
+    // mikzfix: ready for the docked panel when it is shown later.
+    await MikzfixCmDock.prepareWindow();
     await windowManager.minimize();
     await windowManager.hide();
     _isCmReadyToShow = true;

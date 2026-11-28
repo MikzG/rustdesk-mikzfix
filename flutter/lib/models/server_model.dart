@@ -13,6 +13,7 @@ import 'package:window_manager/window_manager.dart';
 import '../common.dart';
 import '../common/formatter/id_formatter.dart';
 import '../desktop/pages/server_page.dart' as desktop;
+import '../desktop/widgets/mikzfix_cm_dock.dart';
 import '../desktop/widgets/tabbar_widget.dart';
 import '../mobile/pages/server_page.dart';
 import 'model.dart';
@@ -576,6 +577,8 @@ class ServerModel with ChangeNotifier {
       }
       if (desktopType == DesktopType.cm && !hideCm) {
         showCmWindow();
+        // mikzfix: every new connection (or one just accepted) opens the docked panel.
+        MikzfixCmDock.expand();
       }
       scrollToBottom();
       notifyListeners();
@@ -598,8 +601,20 @@ class ServerModel with ChangeNotifier {
     });
     // Only do the hidden task when on Desktop.
     if (client.authorized && isDesktop) {
-      cmHiddenTimer = Timer(const Duration(seconds: 3), () {
-        if (!hideCm) windowManager.minimize();
+      // mikzfix: the docked cm collapses to its edge tab instead of minimizing (it has no
+      // taskbar entry to restore it from), and a bit later, so the customer can read who is
+      // connected. Any pointer activity on the panel cancels it (ConnectionManager).
+      final isCm = desktopType == DesktopType.cm;
+      cmHiddenTimer?.cancel();
+      cmHiddenTimer = Timer(
+          isCm ? kMikzfixCmAutoCollapseDelay : const Duration(seconds: 3), () {
+        if (!hideCm) {
+          if (isCm) {
+            MikzfixCmDock.collapse(auto: true);
+          } else {
+            windowManager.minimize();
+          }
+        }
         cmHiddenTimer = null;
       });
     }
